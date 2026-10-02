@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { Invoice } from '../../../api/types'
@@ -27,6 +27,13 @@ function serveInvoices(invoices: Invoice[]) {
   )
   return requests
 }
+
+/**
+ * Lets `ms` of real time pass, inside `act`, so that a timer which fires
+ * meanwhile (a pause in typing) updates the page without a warning.
+ */
+const letTimePass = (ms: number) =>
+  act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)))
 
 const DEFAULT_QUERY = { page: '1', pageSize: '10', ordering: 'DESC' }
 const manyInvoices = Array.from({ length: 25 }, (_, index) => makeInvoice(index + 1))
@@ -75,6 +82,36 @@ describe('InvoiceListPage', () => {
     await waitFor(() => expect(requests.at(-1)).toEqual({ ...DEFAULT_QUERY, status: 'Overdue' }))
     expect(router.state.location.search).toBe('?status=Overdue')
     expect(screen.getByRole('combobox', { name: 'Status' })).toHaveTextContent('Overdue')
+  })
+
+  it.each<[string, 'fromDate' | 'toDate']>([
+    ['Invoice date from', 'fromDate'],
+    ['Invoice date to', 'toDate'],
+  ])('keeps a partly typed "%s" until the date is complete', async (label, param) => {
+    const requests = serveInvoices([appendixAInvoice])
+    const { router } = renderApp('/invoices', { signedIn: true })
+    await screen.findByRole('link', { name: 'IV1780488206995' })
+    const field = screen.getByLabelText(label)
+
+    // While the User types the year 2026, Chrome reports 0002-01-01 and then 0202-01-01.
+    // user-event fills a date input only with a whole date, so set each value directly.
+    for (const partialDate of ['0002-01-01', '0202-01-01']) {
+      fireEvent.change(field, { target: { value: partialDate } })
+      await letTimePass(600)
+
+      expect(field).toHaveValue(partialDate)
+      expect(requests).toEqual([DEFAULT_QUERY])
+      expect(router.state.location.search).toBe('')
+    }
+
+    fireEvent.change(field, { target: { value: '2026-01-01' } })
+
+    await waitFor(() =>
+      expect(requests.at(-1)).toEqual({ ...DEFAULT_QUERY, [param]: '2026-01-01' }),
+    )
+    expect(requests.filter((query) => query[param])).toHaveLength(1)
+    expect(router.state.location.search).toBe(`?${param}=2026-01-01`)
+    expect(field).toHaveValue('2026-01-01')
   })
 
   it('sorts by a column header and toggles the order', async () => {
@@ -174,6 +211,80 @@ describe('InvoiceListPage', () => {
     await waitFor(() => expect(router.state.location.search).toBe('?sortBy=dueDate'))
     expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('')
     expect(screen.getByRole('button', { name: 'Clear filters' })).toBeDisabled()
+  })
+
+  // The list drops a partial date, and a "to" that ends before "from", so the URL never holds them.
+  it.each<{
+    name: string
+    path: string
+    label: string
+    date: string
+    param: 'fromDate' | 'toDate'
+  }>([
+    {
+      name: 'a partly typed date',
+      path: '/invoices?status=Overdue',
+      label: 'Invoice date from',
+      date: '0002-01-01',
+      param: 'fromDate',
+    },
+    {
+      name: 'a "to" date before "from"',
+      path: '/invoices?fromDate=2026-05-01',
+      label: 'Invoice date to',
+      date: '2026-04-01',
+      param: 'toDate',
+    },
+  ])('clears $name together with the filters', async ({ path, label, date, param }) => {
+    const requests = serveInvoices([appendixAInvoice])
+    const user = userEvent.setup()
+    const { router } = renderApp(path, { signedIn: true })
+    await screen.findByRole('link', { name: 'IV1780488206995' })
+
+    fireEvent.change(screen.getByLabelText(label), { target: { value: date } })
+    await letTimePass(600)
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+
+    await waitFor(() => expect(requests.at(-1)).toEqual(DEFAULT_QUERY))
+    expect(router.state.location.search).toBe('')
+    // Look the boxes up again: Clear filters may replace them.
+    expect(screen.getByLabelText('Invoice date from')).toHaveValue('')
+    expect(screen.getByLabelText('Invoice date to')).toHaveValue('')
+    expect(requests.filter((query) => query[param])).toEqual([])
+  })
+
+  it('does not apply a date typed just before Clear filters', async () => {
+    const requests = serveInvoices([appendixAInvoice])
+    const user = userEvent.setup()
+    const { router } = renderApp('/invoices?status=Overdue', { signedIn: true })
+    await screen.findByRole('link', { name: 'IV1780488206995' })
+
+    // The click comes before the pause that would apply the date.
+    fireEvent.change(screen.getByLabelText('Invoice date from'), {
+      target: { value: '2026-01-01' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await letTimePass(600)
+
+    expect(router.state.location.search).toBe('')
+    expect(screen.getByLabelText('Invoice date from')).toHaveValue('')
+    expect(requests.filter((query) => query.fromDate)).toEqual([])
+  })
+
+  it('clears a date draft with the Clear filters button of an empty list too', async () => {
+    serveInvoices([])
+    const user = userEvent.setup()
+    renderApp('/invoices?status=Paid', { signedIn: true })
+    const emptyState = (await screen.findByText('No invoices match your filters')).parentElement!
+
+    fireEvent.change(screen.getByLabelText('Invoice date from'), {
+      target: { value: '0002-01-01' },
+    })
+    await user.click(within(emptyState).getByRole('button', { name: 'Clear filters' }))
+
+    expect(await screen.findByText('No invoices yet')).toBeInTheDocument()
+    expect(screen.getByLabelText('Invoice date from')).toHaveValue('')
+    expect(screen.getByLabelText('Invoice date to')).toHaveValue('')
   })
 
   it('invites the User to create the first Invoice', async () => {

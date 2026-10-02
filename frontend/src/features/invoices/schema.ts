@@ -15,8 +15,8 @@ import { addDaysIso, isIsoDate } from '../../lib/dates'
 const INVOICE_NUMBER = /^[A-Za-z0-9][A-Za-z0-9\-_/.#]*$/
 const MOBILE_NUMBER = /^\+?[0-9\s\-()]+$/
 
-const hasAtMostTwoDecimals = (value: number) =>
-  Math.abs(value * 100 - Math.round(value * 100)) < 1e-9
+// Not `value * 100`: it is inexact from 131,072 up, so it would reject amounts the API accepts.
+const hasAtMostTwoDecimals = (value: number) => Number(value.toFixed(2)) === value
 
 const blankToUndefined = (value: string) => value || undefined
 

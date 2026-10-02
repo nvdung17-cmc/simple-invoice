@@ -36,6 +36,9 @@ export function InvoiceListPage() {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // Clear filters changes it, which restarts the filter boxes: a date box would otherwise keep
+  // text that the URL never held (a partial date, a "to" before "from").
+  const [clearCount, setClearCount] = useState(0)
   const linkState: InvoiceLinkState = { listSearch: location.search }
 
   function handleSort(field: SortField) {
@@ -48,7 +51,15 @@ export function InvoiceListPage() {
 
   const changePage = (page: number) => update({ page })
   const changePageSize = (pageSize: number) => update({ pageSize })
-  const filters = <InvoiceFilters params={params} onChange={update} onClear={clearFilters} />
+
+  function handleClear() {
+    setClearCount((count) => count + 1)
+    clearFilters()
+  }
+
+  const filters = (
+    <InvoiceFilters key={clearCount} params={params} onChange={update} onClear={handleClear} />
+  )
   // The search box stays visible on phones; count only the filters the panel hides.
   const hiddenFilterCount = [params.status, params.fromDate, params.toDate].filter(Boolean).length
 
@@ -76,7 +87,7 @@ export function InvoiceListPage() {
           <EmptyState
             title="No invoices match your filters"
             description="Try another search or Status, or clear the filters."
-            action={<Button onClick={clearFilters}>Clear filters</Button>}
+            action={<Button onClick={handleClear}>Clear filters</Button>}
           />
         ) : (
           <EmptyState

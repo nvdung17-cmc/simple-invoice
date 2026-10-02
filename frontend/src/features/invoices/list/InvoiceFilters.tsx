@@ -13,6 +13,7 @@ import {
   STATUS_OPTIONS,
   type InvoiceListParams,
 } from '../listParams'
+import { DateFilter } from './DateFilter'
 
 /** "Date created" is the API's own order, so choosing it sends no `sortBy` at all. */
 const DATE_CREATED = 'createdAt'
@@ -96,21 +97,17 @@ export function InvoiceFilters({
           <ArrowDownwardIcon fontSize="small" />
         </ToggleButton>
       </ToggleButtonGroup>
-      <TextField
-        type="date"
+      <DateFilter
         label="Invoice date from"
-        size="small"
-        value={params.fromDate ?? ''}
-        onChange={(event) => onChange({ fromDate: event.target.value || undefined })}
-        slotProps={{ inputLabel: { shrink: true }, htmlInput: { max: params.toDate } }}
+        value={params.fromDate}
+        max={params.toDate}
+        onCommit={(fromDate) => onChange({ fromDate })}
       />
-      <TextField
-        type="date"
+      <DateFilter
         label="Invoice date to"
-        size="small"
-        value={params.toDate ?? ''}
-        onChange={(event) => onChange({ toDate: event.target.value || undefined })}
-        slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: params.fromDate } }}
+        value={params.toDate}
+        min={params.fromDate}
+        onCommit={(toDate) => onChange({ toDate })}
       />
       <Button onClick={onClear} disabled={!hasActiveFilters(params)}>
         Clear filters
