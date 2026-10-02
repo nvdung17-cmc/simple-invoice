@@ -17,3 +17,25 @@ export const trimToUndefined = ({ value }: TransformFnParams): unknown => {
 /** Trims and upper-cases, for case-insensitive codes such as a Currency or a sort order. */
 export const trimToUpperCase = ({ value }: TransformFnParams): unknown =>
   typeof value === 'string' ? value.trim().toUpperCase() : value;
+
+/**
+ * For an optional field that has a default: a blank value (as for
+ * trimToUndefined) counts as absent and becomes `fallback`. Any other value goes
+ * through `transform`, or stays as it is, so the validators still report an
+ * invalid one.
+ *
+ * It returns the default rather than undefined, because an undefined result
+ * would overwrite the default of the property. It judges the value the client
+ * sent (`obj[key]`), because @Type(() => Number) has already turned '' into 0
+ * when a transform runs.
+ */
+export const defaultIfBlank =
+  (
+    fallback: unknown,
+    transform: (params: TransformFnParams) => unknown = ({ value }) => value,
+  ) =>
+  (params: TransformFnParams): unknown => {
+    const sent: unknown = params.obj[params.key];
+    const blank = trimToUndefined({ ...params, value: sent }) === undefined;
+    return blank ? fallback : transform(params);
+  };

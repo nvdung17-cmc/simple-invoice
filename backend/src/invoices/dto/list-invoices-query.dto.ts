@@ -9,7 +9,11 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { trimToUndefined, trimToUpperCase } from '../../common/transforms.js';
+import {
+  defaultIfBlank,
+  trimToUndefined,
+  trimToUpperCase,
+} from '../../common/transforms.js';
 import { IsDateOnly, IsOnOrAfter } from '../../common/validators.js';
 import {
   INVOICE_STATUSES,
@@ -22,6 +26,12 @@ export type SortField = (typeof SORT_FIELDS)[number];
 export const SORT_ORDERS = ['ASC', 'DESC'] as const;
 export type SortOrder = (typeof SORT_ORDERS)[number];
 
+// The defaults (spec §5.3), each named once: the property, its Swagger entry
+// and the transform for a blank value all use it.
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_ORDERING: SortOrder = 'DESC';
+
 /** Maps a Status in any case to its canonical spelling; a blank value counts as absent. */
 function toInvoiceStatus({ value }: TransformFnParams): unknown {
   if (typeof value !== 'string') return value;
@@ -30,27 +40,36 @@ function toInvoiceStatus({ value }: TransformFnParams): unknown {
   return INVOICE_STATUSES.find((s) => s.toLowerCase() === wanted) ?? value;
 }
 
-/** Query of GET /invoices (spec §5.3). Blank optional filters are ignored. */
+/**
+ * Query of GET /invoices (spec §5.3). A blank optional parameter counts as
+ * absent: a filter is ignored, and page, pageSize and ordering take their defaults.
+ */
 export class ListInvoicesQueryDto {
   @ApiPropertyOptional({
     minimum: 1,
     maximum: Number.MAX_SAFE_INTEGER,
-    default: 1,
+    default: DEFAULT_PAGE,
   })
   @Type(() => Number)
+  @Transform(defaultIfBlank(DEFAULT_PAGE))
   @IsInt()
   @Min(1)
   // TypeORM writes the offset into the SQL text, and a number of 1e21 or more
   // prints as 1e+21, which Postgres rejects: past this bound a request is a 400.
   @Max(Number.MAX_SAFE_INTEGER)
-  page: number = 1;
+  page: number = DEFAULT_PAGE;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 10 })
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: 100,
+    default: DEFAULT_PAGE_SIZE,
+  })
   @Type(() => Number)
+  @Transform(defaultIfBlank(DEFAULT_PAGE_SIZE))
   @IsInt()
   @Min(1)
   @Max(100)
-  pageSize: number = 10;
+  pageSize: number = DEFAULT_PAGE_SIZE;
 
   @ApiPropertyOptional({
     enum: [...SORT_FIELDS],
@@ -63,13 +82,13 @@ export class ListInvoicesQueryDto {
 
   @ApiPropertyOptional({
     enum: [...SORT_ORDERS],
-    default: 'DESC',
+    default: DEFAULT_ORDERING,
     description:
       'Direction of the sort key in effect (case-insensitive). The default with no sortBy is newest first.',
   })
-  @Transform(trimToUpperCase)
+  @Transform(defaultIfBlank(DEFAULT_ORDERING, trimToUpperCase))
   @IsIn(SORT_ORDERS)
-  ordering: SortOrder = 'DESC';
+  ordering: SortOrder = DEFAULT_ORDERING;
 
   @ApiPropertyOptional({
     enum: [...INVOICE_STATUSES],

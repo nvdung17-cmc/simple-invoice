@@ -163,15 +163,22 @@ describe('Invoices: list and detail (e2e)', () => {
       expect((await list({ keyword: '_' })).paging.total).toBe(0);
     });
 
-    it('ignores a blank keyword and other blank filters', async () => {
+    it('ignores a blank keyword and other blank parameters', async () => {
       const body = await list({
         keyword: '   ',
         status: '',
         sortBy: '',
         fromDate: '',
         toDate: '',
+        page: '',
+        pageSize: '',
+        ordering: '',
       });
-      expect(body.paging.total).toBe(41);
+      // Blank counts as absent: the default paging, newest first.
+      expect(body.paging).toEqual({ page: 1, pageSize: 10, total: 41 });
+      expect(body.data).toHaveLength(10);
+      const createdAt = body.data.map((invoice) => invoice.createdAt);
+      expect(createdAt).toEqual([...createdAt].sort().reverse());
     });
 
     it.each([

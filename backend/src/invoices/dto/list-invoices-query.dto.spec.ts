@@ -43,13 +43,16 @@ describe('ListInvoicesQueryDto', () => {
     });
   });
 
-  it('trims the keyword and ignores blank optional filters', () => {
+  it('trims the keyword and ignores blank optional parameters', () => {
     const { dto, messages } = parse({
       keyword: '  acme ',
       status: ' ',
       sortBy: '',
       fromDate: '',
       toDate: '',
+      page: '',
+      pageSize: '',
+      ordering: '',
     });
     expect(messages).toEqual([]);
     expect(dto.keyword).toBe('acme');
@@ -57,12 +60,25 @@ describe('ListInvoicesQueryDto', () => {
     expect(dto.sortBy).toBeUndefined();
     expect(dto.fromDate).toBeUndefined();
     expect(dto.toDate).toBeUndefined();
+    // A blank page, pageSize or ordering counts as absent: it takes the default.
+    expect(dto).toMatchObject({ page: 1, pageSize: 10, ordering: 'DESC' });
+  });
+
+  it('counts a whitespace-only page, pageSize or ordering as blank too', () => {
+    const { dto, messages } = parse({
+      page: '  ',
+      pageSize: ' \t ',
+      ordering: '   ',
+    });
+    expect(messages).toEqual([]);
+    expect(dto).toMatchObject({ page: 1, pageSize: 10, ordering: 'DESC' });
   });
 
   const invalidQueries: Array<[Record<string, string>, string]> = [
     [{ page: '0' }, 'page must not be less than 1'],
     [{ page: 'two' }, 'page must be an integer number'],
     [{ page: '1e21' }, 'page must not be greater than 9007199254740991'],
+    [{ pageSize: '0' }, 'pageSize must not be less than 1'],
     [{ pageSize: '101' }, 'pageSize must not be greater than 100'],
     [
       { sortBy: 'customer' },
