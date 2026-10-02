@@ -4,6 +4,7 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { SnackbarProvider } from 'notistack'
 import type { DataRouter } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
+import { AuthProvider } from './auth/AuthProvider'
 import { theme } from './theme'
 
 /**
@@ -20,7 +21,9 @@ export function App({ router, queryClient }: { router: DataRouter; queryClient: 
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
+          <AuthProvider>
+            <RouterProvider router={router} />
+          </AuthProvider>
         </QueryClientProvider>
       </SnackbarProvider>
     </ThemeProvider>
