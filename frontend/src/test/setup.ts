@@ -1,3 +1,4 @@
+import '../zodConfig' // the tests run the same jitless Zod as the bundle (main.tsx imports it first)
 import '@testing-library/jest-dom/vitest'
 import { configure } from '@testing-library/react'
 import { server } from './msw/server'
