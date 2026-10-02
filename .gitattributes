@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux containers and on CI, so they keep LF line
+# endings on every platform. A CRLF checkout (Windows with core.autocrlf) would
+# otherwise break docker-entrypoint.sh in the backend container.
+*.sh text eol=lf

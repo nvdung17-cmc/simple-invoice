@@ -1,3 +1,5 @@
+// Keep this first: it configures Zod before any module below builds a schema.
+import './zodConfig'
 import '@fontsource/roboto/300.css'
 import '@fontsource/roboto/400.css'
 import '@fontsource/roboto/500.css'

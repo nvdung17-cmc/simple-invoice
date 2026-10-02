@@ -1,0 +1,10 @@
+# Only the sources go into the build. A local .env must not change the image.
+node_modules
+dist
+coverage
+*.tsbuildinfo
+*.log
+.env
+.env.*
+Dockerfile
+.dockerignore

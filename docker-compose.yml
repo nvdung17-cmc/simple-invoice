@@ -1,0 +1,71 @@
+# SimpleInvoice: the whole stack with one command, `docker compose up --build`.
+#
+# Every setting below reads an environment variable (from .env or the shell)
+# and falls back to a LOCAL-ONLY default, so a fresh clone runs without a .env
+# file. These defaults are for one developer machine. For anything else, set
+# every secret in .env (see .env.example). An empty value also uses the default.
+
+name: simple-invoice
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-simple_invoice}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-only-db-password}
+      POSTGRES_DB: ${POSTGRES_DB:-simple_invoice}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1: on the first start the image runs a temporary server that
+      # listens only on the Unix socket; only the final server answers on TCP.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build: ./backend
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://${POSTGRES_USER:-simple_invoice}:${POSTGRES_PASSWORD:-local-only-db-password}@db:5432/${POSTGRES_DB:-simple_invoice}
+      JWT_SECRET: ${JWT_SECRET:-local-only-jwt-secret-do-not-use-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-3600}
+      COOKIE_SECURE: ${COOKIE_SECURE:-auto}
+      APP_TIMEZONE: ${APP_TIMEZONE:-UTC}
+      LOGIN_THROTTLE_LIMIT: ${LOGIN_THROTTLE_LIMIT:-5}
+      LOGIN_THROTTLE_TTL: ${LOGIN_THROTTLE_TTL:-60}
+      TRUST_PROXY: ${TRUST_PROXY:-loopback, linklocal, uniquelocal}
+      SEED_ON_START: ${SEED_ON_START:-true}
+      SEED_USER_EMAIL: ${SEED_USER_EMAIL:-admin@example.com}
+      SEED_USER_PASSWORD: ${SEED_USER_PASSWORD:-Password123!}
+      SEED_USER_FULLNAME: ${SEED_USER_FULLNAME:-Admin User}
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
