@@ -3,6 +3,7 @@ import { LoginPage } from './auth/LoginPage'
 import { RequireAuth } from './auth/RequireAuth'
 import { AppLayout } from './components/AppLayout'
 import { NotFoundPage } from './components/NotFoundPage'
+import { CreateInvoicePage } from './features/invoices/create/CreateInvoicePage'
 import { InvoiceDetailPage } from './features/invoices/detail/InvoiceDetailPage'
 import { InvoiceListPage } from './features/invoices/list/InvoiceListPage'
 
@@ -18,6 +19,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Navigate to="/invoices" replace /> },
       { path: 'invoices', element: <InvoiceListPage /> },
+      { path: 'invoices/new', element: <CreateInvoicePage /> },
       { path: 'invoices/:invoiceId', element: <InvoiceDetailPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
