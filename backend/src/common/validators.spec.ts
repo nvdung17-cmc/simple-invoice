@@ -2,6 +2,7 @@ import { validateSync } from 'class-validator';
 import {
   IsDateOnly,
   IsOnOrAfter,
+  MaxCodePoints,
   MaxDecimalPlaces,
   NoNulCharacter,
 } from './validators.js';
@@ -117,4 +118,51 @@ describe('MaxDecimalPlaces', () => {
       expect(moneyMessages(amount)).toEqual([]);
     },
   );
+});
+
+class Limited {
+  @MaxCodePoints(3)
+  text: unknown;
+}
+
+function limitedMessagesFor(text: unknown): string[] {
+  const limited = Object.assign(new Limited(), { text });
+  return validateSync(limited).flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+}
+
+describe('MaxCodePoints', () => {
+  const OVER_LIMIT = 'text must be shorter than or equal to 3 characters';
+
+  it('accepts a string at the limit, and an empty one', () => {
+    expect(limitedMessagesFor('abc')).toEqual([]);
+    expect(limitedMessagesFor('')).toEqual([]);
+  });
+
+  it('counts a surrogate pair as one code point', () => {
+    const pair = '\u{1F600}'; // 2 UTF-16 units, 1 code point
+    expect(limitedMessagesFor(`ab${pair}`)).toEqual([]);
+    expect(limitedMessagesFor(`abc${pair}`)).toEqual([OVER_LIMIT]);
+  });
+
+  // U+2764 followed by a variation selector is how an emoji such as a red heart
+  // is written: 2 code points, which validator.js isLength (so @MaxLength)
+  // counts as 1.
+  it.each([
+    ['U+FE0E', '\u{FE0E}'],
+    ['U+FE0F', '\u{FE0F}'],
+  ])('counts %s as a code point of its own', (_name, selector) => {
+    expect(limitedMessagesFor(`a\u{2764}${selector}`)).toEqual([]);
+    expect(limitedMessagesFor(`ab\u{2764}${selector}`)).toEqual([OVER_LIMIT]);
+  });
+
+  it('rejects a string over the limit with the message of @MaxLength', () => {
+    expect(limitedMessagesFor('abcd')).toEqual([OVER_LIMIT]);
+  });
+
+  it('leaves a value that is not a string to @IsString', () => {
+    expect(limitedMessagesFor(null)).toEqual([]);
+    expect(limitedMessagesFor(42)).toEqual([]);
+  });
 });

@@ -31,6 +31,7 @@ import {
 import {
   IsDateOnly,
   IsOnOrAfter,
+  MaxCodePoints,
   MaxDecimalPlaces,
   NoNulCharacter,
 } from '../../common/validators.js';
@@ -107,13 +108,13 @@ export class CustomerInputDto {
   @IsString()
   @NoNulCharacter()
   @IsNotEmpty()
-  @MaxLength(255)
+  @MaxCodePoints(255)
   fullname: string;
 
   @ApiProperty({ example: 'paul@101digital.io', maxLength: 255 })
   @Transform(trim)
   @IsEmail()
-  @MaxLength(255)
+  @MaxCodePoints(255)
   email: string;
 
   @ApiPropertyOptional({
@@ -138,7 +139,7 @@ export class CustomerInputDto {
   @IsOptional()
   @IsString()
   @NoNulCharacter()
-  @MaxLength(500)
+  @MaxCodePoints(500)
   address?: string;
 }
 
@@ -149,7 +150,7 @@ export class InvoiceItemInputDto {
   @IsString()
   @NoNulCharacter()
   @IsNotEmpty()
-  @MaxLength(255)
+  @MaxCodePoints(255)
   name: string;
 
   @ApiProperty({ example: 2, minimum: 1, maximum: 1_000_000 })
@@ -204,7 +205,7 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsString()
   @NoNulCharacter()
-  @MaxLength(100)
+  @MaxCodePoints(100)
   invoiceReference?: string;
 
   @ApiProperty({ format: 'date', example: '2026-10-02' })
@@ -241,7 +242,7 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsString()
   @NoNulCharacter()
-  @MaxLength(1000)
+  @MaxCodePoints(1000)
   description?: string;
 
   @ApiProperty({

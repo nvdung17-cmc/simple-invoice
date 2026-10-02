@@ -224,6 +224,24 @@ describe('Invoices: create (e2e)', () => {
     expect(search.body.paging.total).toBe(0);
   });
 
+  it('rejects a text over its limit in code points with 400, and inserts nothing', async () => {
+    // U+2764 U+FE0F counts as one character to validator.js (so @MaxLength) but
+    // as two to PostgreSQL: 1,001 code points once answered 500 (22001).
+    const res = await create({
+      ...BODY,
+      invoiceNumber: 'INV-LONG',
+      description: 'x'.repeat(999) + '\u{2764}\u{FE0F}',
+    }).expect(400);
+    expect(res.body).toEqual({
+      statusCode: 400,
+      message: ['description must be shorter than or equal to 1000 characters'],
+      error: 'Bad Request',
+    });
+    const search = await get('/invoices?keyword=INV-LONG').expect(200);
+    expect(search.body.data).toEqual([]);
+    expect(search.body.paging.total).toBe(0);
+  });
+
   it('requires authentication', async () => {
     await request(server).post('/invoices').send(BODY).expect(401);
   });

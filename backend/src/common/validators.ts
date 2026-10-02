@@ -112,3 +112,33 @@ export function NoNulCharacter(
     validationOptions,
   );
 }
+
+/**
+ * The string has at most `max` code points, which is how PostgreSQL counts for
+ * varchar(max). @MaxLength does not match it: validator.js isLength leaves out
+ * each U+FE0E or U+FE0F variation selector, so a string one code point too
+ * long passes and the insert fails with 22001 (a 500). The message is the one
+ * of @MaxLength. A value that is not a string passes, because @IsString
+ * reports that.
+ */
+export function MaxCodePoints(
+  max: number,
+  validationOptions?: ValidationOptions,
+): PropertyDecorator {
+  return ValidateBy(
+    {
+      name: 'maxCodePoints',
+      constraints: [max],
+      validator: {
+        validate: (value: unknown) =>
+          typeof value !== 'string' || Array.from(value).length <= max,
+        defaultMessage: buildMessage(
+          (eachPrefix) =>
+            `${eachPrefix}$property must be shorter than or equal to $constraint1 characters`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}

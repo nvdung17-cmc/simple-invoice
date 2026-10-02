@@ -226,4 +226,49 @@ describe('CreateInvoiceDto', () => {
       `${field} must not contain a NUL character`,
     ]);
   });
+
+  // PostgreSQL varchar(n) counts code points, but validator.js isLength (so
+  // @MaxLength) counts "character + U+FE0F" as one. A text one code point over
+  // the limit then passed validation and answered 500. HEART is two code points.
+  const HEART = '\u{2764}\u{FE0F}';
+  const tooLongBodies: Array<[string, number, Record<string, unknown>]> = [
+    [
+      'customer.fullname',
+      255,
+      { customer: { ...VALID.customer, fullname: 'x'.repeat(254) + HEART } },
+    ],
+    [
+      'customer.email',
+      255,
+      { customer: { ...VALID.customer, email: 'x'.repeat(254) + HEART } },
+    ],
+    [
+      'customer.address',
+      500,
+      { customer: { ...VALID.customer, address: 'x'.repeat(499) + HEART } },
+    ],
+    [
+      'items.0.name',
+      255,
+      { items: [{ ...item, name: 'x'.repeat(254) + HEART }] },
+    ],
+    ['invoiceReference', 100, { invoiceReference: 'x'.repeat(99) + HEART }],
+    ['description', 1000, { description: 'x'.repeat(999) + HEART }],
+  ];
+
+  // The email is not a valid address either, so it also draws "must be an email".
+  it.each(tooLongBodies)(
+    'rejects %s over %d code points',
+    (field, limit, overrides) => {
+      expect(parse({ ...VALID, ...overrides }).messages).toContain(
+        `${field} must be shorter than or equal to ${limit} characters`,
+      );
+    },
+  );
+
+  it('accepts a text of exactly the limit in code points', () => {
+    const description = 'x'.repeat(998) + HEART;
+    expect(Array.from(description)).toHaveLength(1000);
+    expect(parse({ ...VALID, description }).messages).toEqual([]);
+  });
 });
