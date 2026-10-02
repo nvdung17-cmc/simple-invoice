@@ -164,7 +164,7 @@ export class InvoiceItemInputDto {
     minimum: 0.01,
     maximum: 1_000_000,
     description:
-      'Rate: the price of one unit; greater than 0, at most 2 decimal places.',
+      'Rate: the amount charged for one unit; greater than 0, at most 2 decimal places.',
   })
   @IsNumber(FINITE_NUMBER)
   @IsPositive()
@@ -175,7 +175,7 @@ export class InvoiceItemInputDto {
 
 /**
  * Body of POST /invoices (spec §5.3). Totals and the Stored Status are never
- * accepted from the client: the server computes them.
+ * accepted from the caller: the server computes them.
  */
 export class CreateInvoiceDto {
   @ApiProperty({ type: CustomerInputDto })

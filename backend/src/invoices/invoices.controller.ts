@@ -53,7 +53,10 @@ export class InvoicesController {
     description:
       'Search by Invoice Number or Customer name, filter by Status and Invoice Date range, sort, and paginate on the server.',
   })
-  @ApiOkResponse({ type: InvoiceListResponseDto })
+  @ApiOkResponse({
+    type: InvoiceListResponseDto,
+    description: 'One page of Invoices and the paging totals',
+  })
   @ApiBadRequestResponse({
     type: ErrorResponseDto,
     description: 'A query parameter is not valid',
@@ -65,7 +68,10 @@ export class InvoicesController {
   @Get(':id')
   @ApiOperation({ summary: 'Get one Invoice with its item and totals' })
   @ApiParam({ name: 'id', format: 'uuid', description: 'The invoiceId' })
-  @ApiOkResponse({ type: InvoiceDto })
+  @ApiOkResponse({
+    type: InvoiceDto,
+    description: 'The Invoice with its item and totals',
+  })
   @ApiBadRequestResponse({
     type: ErrorResponseDto,
     description: 'id is not a valid UUID',
@@ -86,6 +92,7 @@ export class InvoicesController {
   })
   @ApiCreatedResponse({
     type: InvoiceDto,
+    description: 'The new Draft Invoice',
     headers: {
       Location: {
         description: 'Path of the new Invoice: /invoices/{invoiceId}',

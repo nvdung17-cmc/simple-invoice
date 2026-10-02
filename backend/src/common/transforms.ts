@@ -25,7 +25,7 @@ export const trimToUpperCase = ({ value }: TransformFnParams): unknown =>
  * invalid one.
  *
  * It returns the default rather than undefined, because an undefined result
- * would overwrite the default of the property. It judges the value the client
+ * would overwrite the default of the property. It judges the value the caller
  * sent (`obj[key]`), because @Type(() => Number) has already turned '' into 0
  * when a transform runs.
  */

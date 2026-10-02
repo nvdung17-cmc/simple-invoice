@@ -122,7 +122,7 @@ export class InvoicesService {
 
   /**
    * Creates a Draft Invoice with its one item (spec §5.3, create flow). The
-   * totals are computed here, never taken from the client. `save` writes the
+   * totals are computed here, never taken from the request. `save` writes the
    * Invoice and its item in one transaction. The unique index is the only
    * uniqueness check, so two concurrent requests cannot both succeed.
    */

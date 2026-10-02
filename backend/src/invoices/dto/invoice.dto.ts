@@ -31,7 +31,10 @@ export class InvoiceItemDto {
   @ApiProperty({ example: 2 })
   quantity: number;
 
-  @ApiProperty({ example: 1000, description: 'Rate: the price of one unit.' })
+  @ApiProperty({
+    example: 1000,
+    description: 'Rate: the amount charged for one unit.',
+  })
   rate: number;
 
   @ApiProperty({ example: 2000, description: 'quantity × rate' })

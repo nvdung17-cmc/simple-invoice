@@ -8,7 +8,7 @@ export class ErrorResponseDto {
   @ApiProperty({
     oneOf: [{ type: 'string' }, { type: 'array', items: { type: 'string' } }],
     description:
-      'A message, or one message per invalid field for validation errors (400).',
+      'A message, or one message per failed rule for validation errors (400).',
     example: 'Invoice not found',
   })
   message: string | string[];
