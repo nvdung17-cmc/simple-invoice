@@ -124,4 +124,24 @@ describe('InvoicesService.create', () => {
     const { service } = setup(() => Promise.reject(other));
     await expect(service.create(body, 'user-id')).rejects.toBe(other);
   });
+
+  it('rethrows an error on the Invoice Number index that is not a unique violation', async () => {
+    // The same constraint name, but 23514 (check_violation): not a duplicate.
+    const other = new QueryFailedError(
+      'INSERT INTO "invoices"',
+      [],
+      Object.assign(new Error('new row violates check constraint'), {
+        code: '23514',
+        constraint: 'invoices_invoice_number_lower_uq',
+      }),
+    );
+    const { service } = setup(() => Promise.reject(other));
+    await expect(service.create(body, 'user-id')).rejects.toBe(other);
+  });
+
+  it('rethrows an error that is not a QueryFailedError unchanged', async () => {
+    const plain = new Error('connection lost');
+    const { service } = setup(() => Promise.reject(plain));
+    await expect(service.create(body, 'user-id')).rejects.toBe(plain);
+  });
 });
