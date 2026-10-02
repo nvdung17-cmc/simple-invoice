@@ -170,6 +170,14 @@ describe('createInvoiceSchema', () => {
     expect(errorsAfter(change)[path]).toBe(message)
   })
 
+  // 131072.02 * 100 is 13107201.999999998 in floating point, yet the API accepts the amount.
+  it.each<[string, (form: CreateInvoiceFormInput) => void]>([
+    ['a Rate of 131072.02', (form) => (form.item.rate = '131072.02')],
+    ['a Discount of 131072.02', (form) => (form.discount = '131072.02')],
+  ])('accepts %s', (_case, change) => {
+    expect(errorsAfter(change)).toEqual({})
+  })
+
   it('checks the dates while other fields are still invalid', () => {
     expect(
       errorsAfter((form) => {
