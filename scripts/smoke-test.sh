@@ -38,8 +38,10 @@ status=$(api -o /dev/null -w '%{http_code}' "$FRONTEND_URL/api/invoices")
 [ "$status" = 401 ] || fail "GET /api/invoices without a session returned $status, not 401"
 ok "GET /api/invoices without a session returns 401"
 
+# JSON.stringify escapes the values, so a password with " or \ still makes a valid body.
+body=$(node -e 'console.log(JSON.stringify({ email: process.argv[1], password: process.argv[2] }))' "$EMAIL" "$PASSWORD")
 status=$(api -o "$work/login.json" -w '%{http_code}' -H 'Content-Type: application/json' \
-  --data "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" "$FRONTEND_URL/api/auth/login")
+  --data "$body" "$FRONTEND_URL/api/auth/login")
 [ "$status" = 200 ] || fail "POST /api/auth/login returned $status, not 200"
 grep -q 'access_token' "$jar" || fail "POST /api/auth/login set no access_token cookie"
 ok "POST /api/auth/login signs in and sets the session cookie"
