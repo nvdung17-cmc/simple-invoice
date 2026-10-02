@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { Invoice } from '../../../api/types'
@@ -27,6 +27,13 @@ function serveInvoices(invoices: Invoice[]) {
   )
   return requests
 }
+
+/**
+ * Lets `ms` of real time pass, inside `act`, so that a timer which fires
+ * meanwhile (a pause in typing) updates the page without a warning.
+ */
+const letTimePass = (ms: number) =>
+  act(() => new Promise<void>((resolve) => setTimeout(resolve, ms)))
 
 const DEFAULT_QUERY = { page: '1', pageSize: '10', ordering: 'DESC' }
 const manyInvoices = Array.from({ length: 25 }, (_, index) => makeInvoice(index + 1))
@@ -75,6 +82,36 @@ describe('InvoiceListPage', () => {
     await waitFor(() => expect(requests.at(-1)).toEqual({ ...DEFAULT_QUERY, status: 'Overdue' }))
     expect(router.state.location.search).toBe('?status=Overdue')
     expect(screen.getByRole('combobox', { name: 'Status' })).toHaveTextContent('Overdue')
+  })
+
+  it.each<[string, 'fromDate' | 'toDate']>([
+    ['Invoice date from', 'fromDate'],
+    ['Invoice date to', 'toDate'],
+  ])('keeps a partly typed "%s" until the date is complete', async (label, param) => {
+    const requests = serveInvoices([appendixAInvoice])
+    const { router } = renderApp('/invoices', { signedIn: true })
+    await screen.findByRole('link', { name: 'IV1780488206995' })
+    const field = screen.getByLabelText(label)
+
+    // While the User types the year 2026, Chrome reports 0002-01-01 and then 0202-01-01.
+    // user-event fills a date input only with a whole date, so set each value directly.
+    for (const partialDate of ['0002-01-01', '0202-01-01']) {
+      fireEvent.change(field, { target: { value: partialDate } })
+      await letTimePass(600)
+
+      expect(field).toHaveValue(partialDate)
+      expect(requests).toEqual([DEFAULT_QUERY])
+      expect(router.state.location.search).toBe('')
+    }
+
+    fireEvent.change(field, { target: { value: '2026-01-01' } })
+
+    await waitFor(() =>
+      expect(requests.at(-1)).toEqual({ ...DEFAULT_QUERY, [param]: '2026-01-01' }),
+    )
+    expect(requests.filter((query) => query[param])).toHaveLength(1)
+    expect(router.state.location.search).toBe(`?${param}=2026-01-01`)
+    expect(field).toHaveValue('2026-01-01')
   })
 
   it('sorts by a column header and toggles the order', async () => {
