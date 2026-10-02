@@ -5,6 +5,7 @@ import {
   loginAs,
   startTestApp,
   stopTestApp,
+  TEST_TODAY,
   type TestContext,
 } from './utils/test-app.js';
 
@@ -310,6 +311,52 @@ describe('Invoices: list and detail (e2e)', () => {
 
     it('requires authentication', async () => {
       await request(server).get(`/invoices/${APPENDIX_A_ID}`).expect(401);
+    });
+  });
+
+  // The seed's fixed Invoices (generate-invoices.ts) lie on both sides of
+  // TEST_TODAY, the date the test app's clock is pinned to: INV-0001 (Draft)
+  // and INV-0002 (Pending) are past their Due Date, INV-0003 (Pending) falls
+  // due on TEST_TODAY itself, and INV-0004 is Paid long after its Due Date.
+  // The real clock is always later than TEST_TODAY, so under it INV-0003 would
+  // be Overdue: these tests fail if the Overdue rule stops reading the
+  // injected ClockService.
+  describe('Overdue follows the injected clock', () => {
+    it('filters the past-due Invoices as Overdue, but not the one due today or the Paid one', async () => {
+      const overdue = await list({ status: 'Overdue', pageSize: 100 });
+      const numbers = overdue.data.map((invoice) => invoice.invoiceNumber);
+      expect(numbers).toContain('INV-0001');
+      expect(numbers).toContain('INV-0002');
+      expect(numbers).not.toContain('INV-0003');
+      expect(numbers).not.toContain('INV-0004');
+    });
+
+    it('lists each of them with the Status the injected date gives it', async () => {
+      const { data } = await list({ pageSize: 100 });
+      const statusByNumber = Object.fromEntries(
+        data.map((invoice) => [invoice.invoiceNumber, invoice.status]),
+      );
+      expect(statusByNumber).toMatchObject({
+        'INV-0001': 'Overdue',
+        'INV-0002': 'Overdue',
+        'INV-0003': 'Pending',
+        'INV-0004': 'Paid',
+      });
+    });
+
+    it('shows the Invoice due today as Pending on the detail route too', async () => {
+      const { data } = await list({ keyword: 'INV-0003' });
+      expect(data).toHaveLength(1);
+
+      const res = await request(server)
+        .get(`/invoices/${data[0].invoiceId}`)
+        .auth(token, { type: 'bearer' })
+        .expect(200);
+      expect(res.body).toMatchObject({
+        invoiceNumber: 'INV-0003',
+        dueDate: TEST_TODAY,
+        status: 'Pending',
+      });
     });
   });
 });
