@@ -19,6 +19,9 @@ export function buildDataSourceOptions(url: string): DataSourceOptions {
     migrations: [InitialSchema1790812800000],
     migrationsTableName: 'migrations',
     synchronize: false,
+    // The migration creates pg_trgm itself and ids use gen_random_uuid(); TypeORM
+    // would otherwise run CREATE EXTENSION "uuid-ossp" on every connect.
+    installExtensions: false,
     // Failed queries are not logged here. Expected ones are normal (a duplicate
     // Invoice Number becomes a 409; the schema tests break constraints on
     // purpose), unexpected ones reach the global exception filter, which logs

@@ -113,6 +113,13 @@ describe('Database schema (e2e)', () => {
         'invoice_items_invoice_id_idx',
       ]),
     );
+
+    // The migration creates pg_trgm itself and ids use gen_random_uuid(), so no
+    // other extension may be installed (TypeORM would add uuid-ossp on connect).
+    const extensions = await db.dataSource.query<{ extname: string }[]>(
+      'SELECT extname FROM pg_extension ORDER BY extname',
+    );
+    expect(extensions.map((e) => e.extname)).toEqual(['pg_trgm', 'plpgsql']);
   });
 
   it.each([
