@@ -1,5 +1,5 @@
 import { validateSync } from 'class-validator';
-import { IsDateOnly, IsOnOrAfter } from './validators.js';
+import { IsDateOnly, IsOnOrAfter, NoNulCharacter } from './validators.js';
 
 class DateRange {
   @IsDateOnly()
@@ -48,5 +48,38 @@ describe('IsOnOrAfter', () => {
     expect(messagesFor('not-a-date', '2026-06-02')).toEqual([
       'start must be a valid date in YYYY-MM-DD format',
     ]);
+  });
+});
+
+class FreeText {
+  @NoNulCharacter()
+  text: unknown;
+}
+
+function nulMessagesFor(text: unknown): string[] {
+  const free = Object.assign(new FreeText(), { text });
+  return validateSync(free).flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+}
+
+describe('NoNulCharacter', () => {
+  it('accepts ordinary text, including an empty string and line breaks', () => {
+    expect(nulMessagesFor('')).toEqual([]);
+    expect(nulMessagesFor('Nguyễn Văn An\nAcme\tPty Ltd')).toEqual([]);
+  });
+
+  it.each(['\u0000', 'a\u0000b', '\u0000b', 'a\u0000'])(
+    'rejects %j',
+    (text) => {
+      expect(nulMessagesFor(text)).toEqual([
+        'text must not contain a NUL character',
+      ]);
+    },
+  );
+
+  it('leaves a value that is not a string to the type validators', () => {
+    expect(nulMessagesFor(null)).toEqual([]);
+    expect(nulMessagesFor(42)).toEqual([]);
   });
 });

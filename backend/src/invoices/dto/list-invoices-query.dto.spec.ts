@@ -96,6 +96,7 @@ describe('ListInvoicesQueryDto', () => {
       { keyword: 'x'.repeat(101) },
       'keyword must be shorter than or equal to 100 characters',
     ],
+    [{ keyword: 'a\u0000b' }, 'keyword must not contain a NUL character'],
     [
       { fromDate: '2026-02-30' },
       'fromDate must be a valid date in YYYY-MM-DD format',

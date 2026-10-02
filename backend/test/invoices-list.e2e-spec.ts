@@ -261,6 +261,7 @@ describe('Invoices: list and detail (e2e)', () => {
     const invalidQueries: Array<[Query, string]> = [
       [{ pageSize: 101 }, 'pageSize must not be greater than 100'],
       [{ page: 0 }, 'page must not be less than 1'],
+      [{ keyword: 'a\u0000b' }, 'keyword must not contain a NUL character'],
       [{ foo: 'bar' }, 'property foo should not exist'],
     ];
 

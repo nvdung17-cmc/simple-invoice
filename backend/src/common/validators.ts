@@ -56,3 +56,29 @@ export function IsOnOrAfter(
     validationOptions,
   );
 }
+
+/**
+ * The string has no NUL character (U+0000). A Postgres text value cannot hold
+ * one, so the driver's error would surface as a 500 instead of a 400: put this
+ * on every free-text field that is stored or searched. A value that is not a
+ * string passes, because @IsString reports that.
+ */
+export function NoNulCharacter(
+  validationOptions?: ValidationOptions,
+): PropertyDecorator {
+  return ValidateBy(
+    {
+      name: 'noNulCharacter',
+      validator: {
+        validate: (value: unknown) =>
+          typeof value !== 'string' || !value.includes('\u0000'),
+        defaultMessage: buildMessage(
+          (eachPrefix) =>
+            `${eachPrefix}$property must not contain a NUL character`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}

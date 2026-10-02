@@ -14,7 +14,11 @@ import {
   trimToUndefined,
   trimToUpperCase,
 } from '../../common/transforms.js';
-import { IsDateOnly, IsOnOrAfter } from '../../common/validators.js';
+import {
+  IsDateOnly,
+  IsOnOrAfter,
+  NoNulCharacter,
+} from '../../common/validators.js';
 import {
   INVOICE_STATUSES,
   type InvoiceStatus,
@@ -109,6 +113,7 @@ export class ListInvoicesQueryDto {
   @IsOptional()
   @IsString()
   @MaxLength(100)
+  @NoNulCharacter()
   keyword?: string;
 
   @ApiPropertyOptional({
