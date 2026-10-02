@@ -15,9 +15,17 @@ import { seedDatabase } from '../../src/database/seed/seeder.js';
 /** The pinned "today" of every e2e run, so Overdue is deterministic. */
 export const TEST_TODAY = '2026-09-15';
 export const TEST_NOW = new Date('2026-09-15T10:00:00.000Z');
+
+/**
+ * A password made at run time, so no password lives in the code. It has 16
+ * characters: inside the seed's 8-128 and the login body's 1-128.
+ */
+export const randomPassword = (): string =>
+  randomBytes(12).toString('base64url');
+
 export const TEST_USER = {
   email: 'admin@example.com',
-  password: 'Password123!',
+  password: randomPassword(),
   fullname: 'Admin User',
 };
 
@@ -80,16 +88,16 @@ async function createApp(): Promise<NestExpressApplication> {
   return app;
 }
 
-let clientCount = 0;
+let sourceIpCount = 0;
 
 /**
- * A new client IP (TEST-NET-1) for each call, sent as X-Forwarded-For. The app
- * trusts the loopback proxy, so every login gets its own throttle bucket and
- * no test trips the login limit by accident.
+ * A new source IP address (TEST-NET-1) for each call, sent as X-Forwarded-For.
+ * The app trusts the loopback proxy, so every login gets its own throttle
+ * bucket and no test trips the login limit by accident.
  */
-export function nextClientIp(): string {
-  clientCount += 1;
-  return `192.0.2.${clientCount}`;
+export function nextSourceIp(): string {
+  sourceIpCount += 1;
+  return `192.0.2.${sourceIpCount}`;
 }
 
 /**
@@ -102,7 +110,7 @@ export async function loginAs(
 ): Promise<string> {
   const res = await request(server)
     .post('/auth/login')
-    .set('X-Forwarded-For', nextClientIp())
+    .set('X-Forwarded-For', nextSourceIp())
     .send({ email, password })
     .expect(200);
   return (res.body as { accessToken: string }).accessToken;

@@ -9,14 +9,16 @@ import {
   stopDatabase,
   type TestDatabase,
 } from './utils/database.js';
+import { randomPassword } from './utils/test-app.js';
 
 const TODAY = '2026-09-15';
 const NOW = new Date('2026-09-15T10:00:00.000Z');
 const USER = {
   email: 'Admin@Example.com',
-  password: 'Password123!',
+  password: randomPassword(),
   fullname: 'Admin User',
 };
+const NEW_PASSWORD = randomPassword();
 
 describe('Seeder (e2e)', () => {
   let db: TestDatabase;
@@ -40,6 +42,14 @@ describe('Seeder (e2e)', () => {
     return row;
   }
 
+  async function passwordHash(): Promise<string> {
+    const [user] = await db.dataSource.query<{ password_hash: string }[]>(
+      `SELECT password_hash FROM users WHERE id = $1`,
+      [DEFAULT_USER_ID],
+    );
+    return user.password_hash;
+  }
+
   it('applies the migrations and inserts the User, Appendix A and 40 generated Invoices', async () => {
     const result = await seedDatabase(db.dataSource, {
       user: USER,
@@ -50,7 +60,8 @@ describe('Seeder (e2e)', () => {
     expect(await counts()).toEqual({ users: 1, invoices: 41, items: 41 });
   });
 
-  it('changes nothing when run again', async () => {
+  it('inserts nothing when run again', async () => {
+    const before = await passwordHash();
     const result = await seedDatabase(db.dataSource, {
       user: USER,
       today: TODAY,
@@ -58,6 +69,8 @@ describe('Seeder (e2e)', () => {
     });
     expect(result).toEqual({ invoicesInserted: 0 });
     expect(await counts()).toEqual({ users: 1, invoices: 41, items: 41 });
+    // The default User is upserted on every run, and bcrypt salts each hash anew.
+    expect(await passwordHash()).not.toBe(before);
   });
 
   it('stores the Appendix A Invoice verbatim', async () => {
@@ -130,7 +143,7 @@ describe('Seeder (e2e)', () => {
     expect(await counts()).toEqual({ users: 1, invoices: 39, items: 39 });
 
     const result = await seedDatabase(db.dataSource, {
-      user: { ...USER, password: 'NewPassword456!' },
+      user: { ...USER, password: NEW_PASSWORD },
       today: TODAY,
       now: NOW,
       reset: true,
@@ -143,7 +156,7 @@ describe('Seeder (e2e)', () => {
       [DEFAULT_USER_ID],
     );
     expect(
-      await new PasswordHasher().verify('NewPassword456!', user.password_hash),
+      await new PasswordHasher().verify(NEW_PASSWORD, user.password_hash),
     ).toBe(true);
   });
 });
