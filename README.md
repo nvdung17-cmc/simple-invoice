@@ -41,7 +41,7 @@ When the three services are up, open **http://localhost:8080** and sign in:
 |---|---|
 | `admin@example.com` | `Password123!` |
 
-The first build takes a few minutes. Each time the backend container starts, it applies the database migrations and seeds the demo data. The seed adds only what is missing, so a restart is safe.
+The first build takes a few minutes. Each time the backend container starts, it applies the database migrations and seeds the demo data. The seed adds only the Invoices that are missing, and it creates or updates the default User from the `SEED_USER_*` settings, so a restart is safe.
 
 | Service | Address | Notes |
 |---|---|---|
@@ -84,7 +84,7 @@ All configuration comes from environment variables.
 | `POSTGRES_PASSWORD` | `local-only-db-password` | database password; use URL-safe characters |
 | `JWT_SECRET` | a local-only value | HS256 signing secret, at least 32 characters |
 | `JWT_EXPIRES_IN` | `3600` | token lifetime in seconds |
-| `COOKIE_SECURE` | `auto` | `Secure` flag of the session cookie: `auto` (on behind TLS), `true` or `false` |
+| `COOKIE_SECURE` | `auto` | `Secure` flag of the session cookie: `auto` (on when a trusted proxy reports HTTPS), `true` or `false`. The bundled nginx reports plain HTTP, so set `true` when TLS ends in front of it |
 | `APP_TIMEZONE` | `UTC` | IANA time zone that defines "today" for Overdue |
 | `LOGIN_THROTTLE_LIMIT`, `LOGIN_THROTTLE_TTL` | `5`, `60` | login attempts allowed per TTL seconds, per client IP |
 | `TRUST_PROXY` | `loopback, linklocal, uniquelocal` | Express `trust proxy` setting; trusts the bundled nginx |
@@ -139,7 +139,7 @@ The seed creates:
 | Command | Effect |
 |---|---|
 | (automatic) | the backend container seeds on every start (`SEED_ON_START=true`) |
-| `docker compose exec backend npm run seed` | applies pending migrations, then inserts only the missing demo data |
+| `docker compose exec backend npm run seed` | applies pending migrations, inserts only the missing Invoices, and updates the default User from `SEED_USER_*` |
 | `docker compose exec backend npm run seed:reset` | deletes every Invoice, then seeds again; Users are kept |
 | `docker compose down -v` | deletes the whole database; the next `docker compose up` starts from zero |
 
@@ -227,13 +227,13 @@ The create call returns 201 with `"invoiceSubTotal":59.97`, `"totalTax":6`, `"to
 
 ### Errors
 
-Every error has the same JSON shape:
+Errors from `/auth` and `/invoices` have this JSON shape:
 
 ```json
 { "statusCode": 404, "message": "Invoice not found", "error": "Not Found" }
 ```
 
-For a validation error (400), `message` is a list with one entry per problem:
+When the body or the query fails validation (400), `message` is a list with one entry per problem; for every other error it is a string:
 
 ```json
 { "statusCode": 400, "message": ["dueDate must be on or after invoiceDate"], "error": "Bad Request" }
@@ -241,12 +241,15 @@ For a validation error (400), `message` is a list with one entry per problem:
 
 | Status | When |
 |---|---|
-| 400 | the body or the query fails validation, has an unknown field, or the id is not a UUID |
+| 400 | the body or the query fails validation (for example `toDate` before `fromDate`, or a `keyword` over 100 characters), the body is not valid JSON or has an unknown field, or the id is not a UUID |
 | 401 | no token, or an invalid or expired one; a wrong email or password |
 | 404 | the Invoice does not exist |
 | 409 | the Invoice Number is already used, regardless of case |
+| 413 | the JSON body is larger than 100 kB |
 | 429 | too many login attempts |
 | 500 | an unexpected error; the details go to the server log, never to the client |
+
+`GET /health` is the exception: when the database does not answer, its 503 body is the health check's report.
 
 ## Business rules
 
@@ -269,7 +272,7 @@ For a validation error (400), `message` is a list with one entry per problem:
 | `npm test` | `frontend/` | components and pages with Testing Library and a mocked API (MSW): sign-in, session expiry, list, detail, create |
 | `npm run lint`, `npm run typecheck` | either | oxlint and the TypeScript compiler |
 
-With the Docker stack running, `./scripts/smoke-test.sh` checks the app, sign-in through the `/api` proxy, the seeded data, sign-out and Swagger.
+With the Docker stack running, `./scripts/smoke-test.sh` checks the app, sign-in through the `/api` proxy, the seeded data, sign-out and Swagger. It needs `curl` and `node` on the host. It reads the ports and the demo login from the environment, not from `.env`, so export the same values if your `.env` changes them.
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push to `main` and on every pull request. For each app it runs the linter, the format check, the type check, the tests and the build; the backend also runs its e2e tests. A third job starts the Docker stack and runs the smoke test.
 
@@ -292,6 +295,7 @@ flowchart LR
 
 ```
 simple-invoice/
+├── .github/workflows/ci.yml     CI: lint, type check, tests, build, Docker smoke test
 ├── backend/                     NestJS API
 │   ├── src/
 │   │   ├── auth/                sign-in, sign-out, JWT strategy and guard
@@ -302,7 +306,9 @@ simple-invoice/
 │   │   ├── common/              error filter, validators, clock, decorators
 │   │   ├── config/              environment validation
 │   │   └── database/            data source, SQL migrations, seed
-│   └── test/                    e2e tests (supertest + Testcontainers)
+│   ├── test/                    e2e tests (supertest + Testcontainers)
+│   ├── Dockerfile               two-stage build of the API image
+│   └── docker-entrypoint.sh     seeds when SEED_ON_START=true, then starts the API
 ├── frontend/                    React app
 │   ├── src/
 │   │   ├── api/                 HTTP client and API calls
@@ -310,14 +316,17 @@ simple-invoice/
 │   │   ├── features/invoices/   list, detail and create pages
 │   │   ├── components/          shared layout and UI
 │   │   └── lib/                 money and date formatting
-│   └── nginx.conf               serves the app and forwards /api to the backend
+│   ├── Dockerfile               builds the app, then serves it with nginx
+│   ├── nginx.conf               serves the app and forwards /api to the backend
+│   └── security-headers.conf    CSP and the other security headers
 ├── docs/                        design spec, decision records, implementation plan
 ├── scripts/smoke-test.sh        smoke test of the running stack
 ├── docker-compose.yml
+├── .env.example                 every Compose setting, with no real secret
 └── CONTEXT.md                   glossary of the domain terms
 ```
 
-**Why one repository?** The assessment suggests this layout, and one clone, one `docker compose up` and one CI workflow then cover the whole product. The two apps share no code: each has its own `package.json`, lock file and Dockerfile, so each one builds on its own. The only shared fact, the list of supported currencies, is short enough to keep in both apps.
+**Why one repository?** The assessment suggests this layout, and one clone, one `docker compose up` and one CI workflow then cover the whole product. The two apps share no code: each has its own `package.json`, lock file and Dockerfile, so each one builds on its own. What both need, such as the currencies, the Status values and the validation limits, is short enough to keep in both; the frontend's form rules mirror the API's DTOs.
 
 ## Design decisions
 
@@ -335,10 +344,10 @@ Other main choices:
 
 ## Security notes
 
-- The code contains no secret. The API reads all configuration from the environment, validates it when it starts, and stops when a value is missing. The tests generate their own secrets. Only `docker-compose.yml` has defaults, and they are labelled local-only.
+- The code holds no real secret. The API reads all configuration from the environment, validates it when it starts, and stops when a value is missing; the JWT secret and the database URL have no value in code, and the e2e tests generate their own JWT secret. The one literal credential is the demo login (`admin@example.com` / `Password123!`): a local-only default in `docker-compose.yml` and `scripts/smoke-test.sh`, and an example in Swagger and in tests.
 - Passwords are hashed with bcrypt (cost 12). A failed sign-in gives the same message and takes about the same time, whether or not the email exists. Each client IP gets 5 sign-in attempts per minute.
 - JWTs are signed with HS256, with a secret of at least 32 characters, and verification accepts only that algorithm. They expire after one hour by default. Each protected request checks that the User still exists.
-- The session cookie is `HttpOnly` and `SameSite=Strict`, and `Secure` behind TLS. The API accepts it only with the `X-Requested-With: XMLHttpRequest` header.
+- The session cookie is `HttpOnly` and `SameSite=Strict`. It is `Secure` when `COOKIE_SECURE=true`, or in `auto` mode when a trusted proxy reports HTTPS. The bundled nginx serves plain HTTP, so a deployment that adds TLS in front of it sets `COOKIE_SECURE=true`. The API accepts the cookie only with the `X-Requested-With: XMLHttpRequest` header.
 - Validation uses a whitelist, so unknown fields are rejected. The API parses only JSON bodies of up to 100 kB, and an error response never contains a stack trace or SQL.
 - The API sets security headers with helmet. nginx sends a strict Content Security Policy and other security headers with the app.
 - Both app containers run as non-root users, and the published ports listen on 127.0.0.1 only.
