@@ -19,6 +19,11 @@ export function buildDataSourceOptions(url: string): DataSourceOptions {
     migrations: [InitialSchema1790812800000],
     migrationsTableName: 'migrations',
     synchronize: false,
-    logging: ['error', 'warn'],
+    // Failed queries are not logged here. Expected ones are normal (a duplicate
+    // Invoice Number becomes a 409; the schema tests break constraints on
+    // purpose), unexpected ones reach the global exception filter, which logs
+    // them with the request, and TypeORM's own failure log would also write the
+    // query parameters (Customer details, password hashes) to the logs.
+    logging: ['warn'],
   };
 }
