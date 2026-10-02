@@ -10,6 +10,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     build: {
+      // Never inline assets as data: URIs: the CSP's font-src 'self' (nginx) would block
+      // inlined fonts. Vite's default limit inlines the small Roboto greek-ext files.
+      assetsInlineLimit: 0,
       rolldownOptions: {
         output: {
           // Libraries change less often than the app, so their chunks stay cached across releases.
@@ -46,6 +49,9 @@ export default defineConfig(({ mode }) => {
       testTimeout: 15_000,
       // Dates and times in assertions are written for UTC.
       env: { TZ: 'UTC' },
+      // Vitest's performance hints suggest sharing one DOM across test files, but the suite keeps
+      // its default per-file isolation on purpose (own MSW handlers, query cache, router state).
+      experimental: { diagnostics: false },
     },
   }
 })
