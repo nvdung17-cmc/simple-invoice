@@ -33,7 +33,7 @@ describe('LoginPage', () => {
     await signInWith(userFixture.email, USER_PASSWORD)
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/invoices'))
-    expect(await screen.findByRole('button', { name: 'Account menu' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'User menu' })).toBeInTheDocument()
   })
 
   it('returns to the page that asked for a sign-in', async () => {
@@ -44,6 +44,19 @@ describe('LoginPage', () => {
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/invoices/new'))
     expect(router.state.location.search).toBe('?from=link')
+  })
+
+  it('keeps a saved path that starts with // inside the app', async () => {
+    // The router would read `//evil.example/x` as an address on another host.
+    const { router } = renderApp({
+      pathname: '/login',
+      state: { from: { pathname: '//evil.example/x', search: '', hash: '' } },
+    })
+
+    await signInWith(userFixture.email, USER_PASSWORD)
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/evil.example/x'))
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
   })
 
   it('says so when the credentials are wrong', async () => {

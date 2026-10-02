@@ -16,13 +16,13 @@ describe('session', () => {
   it('shows the app to a signed-in User', async () => {
     const { router } = renderApp('/', { signedIn: true })
 
-    expect(await screen.findByRole('button', { name: 'Account menu' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'User menu' })).toBeInTheDocument()
     await waitFor(() => expect(router.state.location.pathname).toBe('/invoices'))
   })
 
   it('signs the User out with one toast when the session expires', async () => {
     const { router } = renderApp('/invoices/new', { signedIn: true })
-    await screen.findByRole('button', { name: 'Account menu' })
+    await screen.findByRole('button', { name: 'User menu' })
     server.use(
       mockHttp.get('/api/invoices', () =>
         HttpResponse.json(
@@ -41,7 +41,7 @@ describe('session', () => {
     expect(screen.getAllByText('Your session has expired. Please sign in again.')).toHaveLength(1)
   })
 
-  it('logs out from the account menu', async () => {
+  it('logs out from the User menu', async () => {
     let loggedOut = false
     server.use(
       mockHttp.post('/api/auth/logout', () => {
@@ -52,7 +52,7 @@ describe('session', () => {
     const user = userEvent.setup()
     const { router } = renderApp('/invoices/new', { signedIn: true })
 
-    await user.click(await screen.findByRole('button', { name: 'Account menu' }))
+    await user.click(await screen.findByRole('button', { name: 'User menu' }))
     expect(screen.getByText('Admin User')).toBeInTheDocument()
     expect(screen.getByText('admin@example.com')).toBeInTheDocument()
     await user.click(screen.getByRole('menuitem', { name: 'Log out' }))

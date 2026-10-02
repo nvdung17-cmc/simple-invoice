@@ -23,8 +23,8 @@ import { useAuth } from '../auth/useAuth'
 
 /**
  * The signed-in shell (spec §6.1): an app bar with the navigation and the
- * account menu, and the current page below it. On small screens the
- * navigation moves into the account menu.
+ * User menu, and the current page below it. On small screens the
+ * navigation moves into the User menu.
  */
 export function AppLayout() {
   const { user, logout } = useAuth()
@@ -70,8 +70,8 @@ export function AppLayout() {
           )}
           <IconButton
             color="inherit"
-            aria-label="Account menu"
-            aria-controls={menuAnchor ? 'account-menu' : undefined}
+            aria-label="User menu"
+            aria-controls={menuAnchor ? 'user-menu' : undefined}
             aria-haspopup="true"
             aria-expanded={menuAnchor ? 'true' : undefined}
             onClick={(event) => setMenuAnchor(event.currentTarget)}
@@ -79,7 +79,7 @@ export function AppLayout() {
             <AccountCircleIcon />
           </IconButton>
           <Menu
-            id="account-menu"
+            id="user-menu"
             anchorEl={menuAnchor}
             open={menuAnchor !== null}
             onClose={closeMenu}
