@@ -13,7 +13,11 @@ import { AllExceptionsFilter } from './all-exceptions.filter.js';
 function setup() {
   const reply = vi.fn();
   const adapterHost = { httpAdapter: { reply } } as unknown as HttpAdapterHost;
-  const request = { method: 'GET', originalUrl: '/invoices' };
+  const request = {
+    method: 'GET',
+    path: '/invoices',
+    originalUrl: '/invoices?keyword=Paul',
+  };
   const response = {};
   const host = {
     switchToHttp: () => ({
@@ -118,5 +122,7 @@ describe('AllExceptionsFilter', () => {
       'GET /invoices failed',
       expect.stringContaining('ECONNREFUSED'),
     );
+    // The query string can hold Customer text, so only the path is logged.
+    expect(logError.mock.calls[0][0]).not.toContain('keyword');
   });
 });

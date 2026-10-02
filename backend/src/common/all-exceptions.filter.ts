@@ -24,7 +24,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const context = host.switchToHttp();
     const request = context.getRequest<{
       method?: string;
-      originalUrl?: string;
+      path?: string;
     }>();
     const [status, body] = this.toResponse(exception, request);
     this.adapterHost.httpAdapter.reply(context.getResponse(), body, status);
@@ -32,7 +32,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   private toResponse(
     exception: unknown,
-    request: { method?: string; originalUrl?: string },
+    request: { method?: string; path?: string },
   ): [number, unknown] {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -62,8 +62,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       ];
     }
 
+    // The path only: the query string can hold Customer text, such as a search
+    // keyword.
     this.logger.error(
-      `${request.method} ${request.originalUrl} failed`,
+      `${request.method} ${request.path} failed`,
       exception instanceof Error ? exception.stack : String(exception),
     );
     return [
