@@ -156,7 +156,11 @@ const money = (invoice: Invoice, amount: number) => formatMoney(amount, invoice.
 function ItemsTable({ invoice }: { invoice: Invoice }) {
   return (
     <TableContainer>
-      <Table size="small" aria-label="Invoice items">
+      <Table
+        size="small"
+        aria-label="Invoice items"
+        sx={{ '& .MuiTableCell-root': { px: { xs: 0.5, sm: 2 } } }}
+      >
         <TableHead>
           <TableRow>
             <TableCell>Item</TableCell>
@@ -168,7 +172,7 @@ function ItemsTable({ invoice }: { invoice: Invoice }) {
         <TableBody>
           {invoice.items.map((item) => (
             <TableRow key={item.id}>
-              <TableCell sx={{ overflowWrap: 'anywhere' }}>{item.name}</TableCell>
+              <TableCell sx={{ overflowWrap: 'break-word' }}>{item.name}</TableCell>
               <TableCell align="right">{item.quantity}</TableCell>
               <TableCell align="right">{money(invoice, item.rate)}</TableCell>
               <TableCell align="right">{money(invoice, item.amount)}</TableCell>
