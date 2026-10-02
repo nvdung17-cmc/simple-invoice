@@ -41,7 +41,7 @@ When the three services are up, open **http://localhost:8080** and sign in:
 |---|---|
 | `admin@example.com` | `Password123!` |
 
-The first build takes a few minutes. Each time the backend container starts, it applies the database migrations and seeds the demo data. The seed adds only the Invoices that are missing, and it creates or updates the default User from the `SEED_USER_*` settings, so a restart is safe.
+The first build takes a few minutes. Each time the backend container starts, it applies the database migrations and seeds the demo data. The seed inserts only the Invoices that are missing, and it creates or updates the default User from the `SEED_USER_*` settings, so a restart is safe.
 
 | Service | Address | Notes |
 |---|---|---|
@@ -75,7 +75,7 @@ All configuration comes from environment variables.
   ```
 
 - `.env` files are ignored by git. Only the `.env.example` files are committed, and they contain no real secret.
-- The API validates its configuration when it starts. It stops when a value is missing or invalid, for example a `JWT_SECRET` shorter than 32 characters. The code has no default for any secret.
+- The API validates its configuration when it starts. It stops when a value is missing or invalid, for example a `JWT_SECRET` shorter than 32 characters. The API has no default for any secret.
 
 | Variable | Compose default | Purpose |
 |---|---|---|
@@ -86,7 +86,7 @@ All configuration comes from environment variables.
 | `JWT_EXPIRES_IN` | `3600` | token lifetime in seconds |
 | `COOKIE_SECURE` | `auto` | `Secure` flag of the session cookie: `auto` (on when a trusted proxy reports HTTPS), `true` or `false`. The bundled nginx reports plain HTTP, so set `true` when TLS ends in front of it |
 | `APP_TIMEZONE` | `UTC` | IANA time zone that defines "today" for Overdue |
-| `LOGIN_THROTTLE_LIMIT`, `LOGIN_THROTTLE_TTL` | `5`, `60` | login attempts allowed per TTL seconds, per client IP |
+| `LOGIN_THROTTLE_LIMIT`, `LOGIN_THROTTLE_TTL` | `5`, `60` | login attempts allowed per TTL seconds, per source IP address |
 | `TRUST_PROXY` | `loopback, linklocal, uniquelocal` | Express `trust proxy` setting; trusts the bundled nginx |
 | `SEED_ON_START` | `true` | seed the database each time the backend container starts |
 | `SEED_USER_EMAIL`, `SEED_USER_PASSWORD`, `SEED_USER_FULLNAME` | `admin@example.com`, `Password123!`, `Admin User` | the default User |
@@ -95,7 +95,7 @@ All configuration comes from environment variables.
 
 ## Running without Docker
 
-You need Node.js 24.15 or later (22.22.2 or a later 22.x also works) and PostgreSQL 17. If the Docker stack is running, stop it first with `docker compose down`, because its backend uses port 3000.
+You need Node.js 24.15 or later (22.22.3 or a later 22.x also works; the Nest CLI schematics need at least 22.22.3) and PostgreSQL 17. If the Docker stack is running, stop it first with `docker compose down`, because its backend uses port 3000.
 
 1. Start PostgreSQL. The easiest way is to start only the compose database:
 
@@ -111,7 +111,7 @@ You need Node.js 24.15 or later (22.22.2 or a later 22.x also works) and Postgre
    cd backend
    cp .env.example .env
    # Edit .env: put the database password into DATABASE_URL, and set
-   # JWT_SECRET (openssl rand -base64 48) and SEED_USER_PASSWORD (8-128 characters).
+   # JWT_SECRET (openssl rand -base64 48) and SEED_USER_PASSWORD (8-72 bytes).
    npm ci
    npm run seed        # compiles the code, applies the migrations, seeds the demo data
    npm run start:dev   # starts the API and restarts it when a file changes
@@ -165,9 +165,9 @@ The query parameters of `GET /invoices` are all optional:
 |---|---|---|
 | `page` | an integer from 1 | `1` |
 | `pageSize` | an integer from 1 to 100 | `10` |
-| `keyword` | part of an Invoice Number or a Customer name, in any case | none |
+| `keyword` | part of an Invoice Number or a Customer name, in any case; at most 100 characters | none |
 | `status` | `Draft`, `Pending`, `Paid` or `Overdue` | all |
-| `fromDate`, `toDate` | `YYYY-MM-DD`; an inclusive range of Invoice Dates | none |
+| `fromDate`, `toDate` | `YYYY-MM-DD`; an inclusive range of Invoice Dates (`toDate` on or after `fromDate`) | none |
 | `sortBy` | `invoiceDate`, `dueDate` or `totalAmount` | the creation time |
 | `ordering` | `ASC` or `DESC` | `DESC`, so the newest come first |
 
@@ -247,7 +247,7 @@ When the body or the query fails validation (400), `message` is a list with one 
 | 409 | the Invoice Number is already used, regardless of case |
 | 413 | the JSON body is larger than 100 kB |
 | 429 | too many login attempts |
-| 500 | an unexpected error; the details go to the server log, never to the client |
+| 500 | an unexpected error; the details go to the server log, never to the caller |
 
 `GET /health` is the exception: when the database does not answer, its 503 body is the health check's report.
 
@@ -340,12 +340,13 @@ Other main choices:
 - The Discount is an amount (Appendix A: 2000 + 200 − 20 = 2180).
 - Each Invoice stores its Tax Rate, so the detail page shows the rate that was applied.
 - The API paths have no global prefix, exactly as the assessment lists them. Swagger is at `/api/docs`.
+- The list response's `paging` uses the field names of the assessment's API section (`page`, `pageSize`, `total`), not those of Appendix A's mock (`pageNumber`, `totalRecords`).
 - The list's search, filters, sort order and page live in the URL, so the back button and a shared link restore the same view.
 
 ## Security notes
 
-- The code holds no real secret. The API reads all configuration from the environment, validates it when it starts, and stops when a value is missing; the JWT secret and the database URL have no value in code, and the e2e tests generate their own JWT secret. The only literal secrets are the local-only defaults in `docker-compose.yml`: the database password, the JWT secret and the demo password. The demo login (`admin@example.com` / `Password123!`) also appears in `scripts/smoke-test.sh`, as a Swagger example and in tests.
-- Passwords are hashed with bcrypt (cost 12). A failed sign-in gives the same message and takes about the same time, whether or not the email exists. Each client IP gets 5 sign-in attempts per minute.
+- The code holds no real secret. The API reads all configuration from the environment, validates it when it starts, and stops when a value is missing; the JWT secret and the database URL have no value in code, and the e2e tests generate their own JWT secret. The only literal secrets are the local-only defaults in `docker-compose.yml`: the database password, the JWT secret and the demo password. The demo login (`admin@example.com` / `Password123!`) also appears in `scripts/smoke-test.sh`, as a Swagger example and in unit-test fixtures; the e2e tests generate their passwords and their JWT secret per run.
+- Passwords are hashed with bcrypt (cost 12). A failed sign-in gives the same message and takes about the same time, whether or not the email exists. Each source IP address gets 5 sign-in attempts per minute. Passwords are at most 72 bytes, bcrypt's limit.
 - JWTs are signed with HS256, with a secret of at least 32 characters, and verification accepts only that algorithm. They expire after one hour by default. Each protected request checks that the User still exists.
 - The session cookie is `HttpOnly` and `SameSite=Strict`. It is `Secure` when `COOKIE_SECURE=true`, or in `auto` mode when a trusted proxy reports HTTPS. The bundled nginx serves plain HTTP, so a deployment that adds TLS in front of it sets `COOKIE_SECURE=true`. The API accepts the cookie only with the `X-Requested-With: XMLHttpRequest` header.
 - Validation uses a whitelist, so unknown fields are rejected. The API parses only JSON bodies of up to 100 kB, and an error response never contains a stack trace or SQL.
@@ -360,7 +361,7 @@ Other main choices:
 - There are no refresh tokens: when the JWT expires (after one hour by default), the User signs in again. Sign-out clears the cookie, but it cannot revoke a token that was already issued, because JWTs are stateless.
 - Only currencies with 2 decimal places are supported, from a fixed list.
 - "Today", and so Overdue, follows one server time zone (`APP_TIMEZONE`).
-- The default `TRUST_PROXY` trusts any proxy on a private network, which suits the bundled nginx. A production deployment must name its real proxy. Otherwise clients could fake `X-Forwarded-For` and get around the per-IP sign-in limit.
+- The default `TRUST_PROXY` trusts any proxy on a private network, which suits the bundled nginx. A production deployment must name its real proxy. Otherwise callers could fake `X-Forwarded-For` and get around the per-IP sign-in limit.
 - Requests sent straight to the API on port 3000 reach it through Docker's network, which the default `TRUST_PROXY` also trusts. A program on the same machine can therefore fake `X-Forwarded-For` on that port and get around the per-IP sign-in limit. Through the app on port 8080 the limit holds. Port 3000 listens on 127.0.0.1 only, and a web page on another site cannot send that header to the API.
 - The local-only defaults in the compose file (the database password, the JWT secret and the demo password) are for one machine only. A real deployment sets all of them in `.env`.
 - nginx looks up the backend's address once, when the frontend container starts. A re-created backend container (for example after `docker compose up -d --build backend`) can get a new address, so run `docker compose restart frontend` afterwards; otherwise requests to `/api` can fail with 502.

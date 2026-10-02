@@ -23,8 +23,9 @@ export interface SeedOptions {
 /**
  * Seeds the database (spec §5.8): pending migrations, the default User
  * (upserted by a fixed id), the Appendix A Invoice and the generated Invoices.
- * Every insert uses ON CONFLICT DO NOTHING, and an Invoice Item is inserted only
- * when its Invoice was, so a second run changes nothing.
+ * Every Invoice insert uses ON CONFLICT DO NOTHING, and an Invoice Item is inserted
+ * only when its Invoice was, so a second run inserts nothing; it only refreshes the
+ * default User (email, password hash, full name) from the options.
  */
 export async function seedDatabase(
   dataSource: DataSource,
