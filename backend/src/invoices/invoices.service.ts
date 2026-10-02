@@ -80,10 +80,21 @@ export class InvoicesService {
       qb.andWhere('invoice.status IN (:...storedIn)', {
         storedIn: criteria.storedIn,
       });
-      if (criteria.due === 'beforeToday') {
-        qb.andWhere('invoice.dueDate < :today', { today });
-      } else if (criteria.due === 'todayOrLater') {
-        qb.andWhere('invoice.dueDate >= :today', { today });
+      switch (criteria.due) {
+        case 'beforeToday':
+          qb.andWhere('invoice.dueDate < :today', { today });
+          break;
+        case 'todayOrLater':
+          qb.andWhere('invoice.dueDate >= :today', { today });
+          break;
+        case 'any':
+          break;
+        default: {
+          // A new DuePosition fails to compile here, instead of silently
+          // dropping its date condition.
+          const unhandled: never = criteria.due;
+          throw new Error(`Unhandled due position: ${String(unhandled)}`);
+        }
       }
     }
 
