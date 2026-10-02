@@ -4,6 +4,7 @@ import {
   IsOnOrAfter,
   MaxCodePoints,
   MaxDecimalPlaces,
+  MaxUtf8Bytes,
   NoNulCharacter,
 } from './validators.js';
 
@@ -164,5 +165,45 @@ describe('MaxCodePoints', () => {
   it('leaves a value that is not a string to @IsString', () => {
     expect(limitedMessagesFor(null)).toEqual([]);
     expect(limitedMessagesFor(42)).toEqual([]);
+  });
+});
+
+class Secret {
+  @MaxUtf8Bytes(72)
+  value: unknown;
+}
+
+function secretMessagesFor(value: unknown): string[] {
+  const secret = Object.assign(new Secret(), { value });
+  return validateSync(secret).flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+}
+
+describe('MaxUtf8Bytes', () => {
+  const OVER_LIMIT = 'value must be at most 72 bytes';
+
+  it('accepts a string of 72 bytes, and an empty one', () => {
+    expect(secretMessagesFor('a'.repeat(72))).toEqual([]);
+    expect(secretMessagesFor('')).toEqual([]);
+  });
+
+  it('rejects a string of 73 bytes', () => {
+    expect(secretMessagesFor('a'.repeat(73))).toEqual([OVER_LIMIT]);
+  });
+
+  // The limit counts UTF-8 bytes, not characters or UTF-16 units.
+  it.each([
+    ['a 3-byte character', '\u{20AC}', 3],
+    ['a 4-byte character', '\u{1F600}', 4],
+  ])('counts bytes: %s', (_name, character, bytes) => {
+    const fits = Math.floor(72 / bytes);
+    expect(secretMessagesFor(character.repeat(fits))).toEqual([]);
+    expect(secretMessagesFor(character.repeat(fits + 1))).toEqual([OVER_LIMIT]);
+  });
+
+  it('leaves a value that is not a string to @IsString', () => {
+    expect(secretMessagesFor(null)).toEqual([]);
+    expect(secretMessagesFor(42)).toEqual([]);
   });
 });
