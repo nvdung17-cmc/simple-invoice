@@ -13,8 +13,9 @@ const EARLIEST_DATE = '1900-01-01'
  * `0202-01-01`, then `2026-01-01`), so a box that follows the URL on every
  * keystroke loses what is typed. This one keeps the typed text and updates the
  * URL once typing pauses on a complete date, or on an empty box. It shows the
- * URL's date whenever that changes from elsewhere: Clear filters or the
- * browser's back button.
+ * URL's date whenever that changes from elsewhere, such as the browser's back
+ * button. Text the URL never takes (a partial date) stays in the box until the
+ * box is remounted, which is what Clear filters does.
  */
 export function DateFilter({
   label,
@@ -32,7 +33,7 @@ export function DateFilter({
   const [text, setText] = useState(value ?? '')
   const [shownValue, setShownValue] = useState(value ?? '')
   if ((value ?? '') !== shownValue) {
-    // The URL changed from elsewhere (back button, Clear filters): show it.
+    // The URL changed from elsewhere (the back button): show it.
     setShownValue(value ?? '')
     if ((value ?? '') !== text) setText(value ?? '')
   }
