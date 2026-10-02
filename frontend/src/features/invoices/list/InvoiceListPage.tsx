@@ -31,13 +31,15 @@ import type { InvoiceLinkState } from './linkState'
  */
 export function InvoiceListPage() {
   const { params, update, clearFilters } = useInvoiceListParams()
-  const { data, isPending, isError, isFetching, refetch } = useInvoiceList(params)
+  const { data, isPending, isPlaceholderData, isError, isFetching, refetch } =
+    useInvoiceList(params)
   const location = useLocation()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
   const [filtersOpen, setFiltersOpen] = useState(false)
-  // Clear filters changes it, which restarts the filter boxes: a date box would otherwise keep
-  // text that the URL never held (a partial date, a "to" before "from").
+  // Clear filters changes it, which restarts the search and filter boxes: a box would otherwise
+  // keep text that the URL never held (a keyword still waiting for its pause, a partial date, a
+  // "to" before "from").
   const [clearCount, setClearCount] = useState(0)
   const linkState: InvoiceLinkState = { listSearch: location.search }
 
@@ -64,7 +66,8 @@ export function InvoiceListPage() {
   const hiddenFilterCount = [params.status, params.fromDate, params.toDate].filter(Boolean).length
 
   let content: ReactNode
-  if (isPending) {
+  // An empty placeholder is the previous filter's answer; it says nothing about this one yet.
+  if (isPending || (isPlaceholderData && data.data.length === 0)) {
     content = (
       <Stack spacing={1} role="status" aria-label="Loading invoices">
         {Array.from({ length: 5 }, (_, index) => (
@@ -148,6 +151,7 @@ export function InvoiceListPage() {
         <Stack spacing={2}>
           <Stack direction="row" spacing={1}>
             <SearchField
+              key={clearCount}
               keyword={params.keyword ?? ''}
               onSearch={(keyword) => update({ keyword: keyword || undefined }, { replace: true })}
             />

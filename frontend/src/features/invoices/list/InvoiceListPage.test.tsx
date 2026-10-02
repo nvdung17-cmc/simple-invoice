@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { http, HttpResponse } from 'msw'
+import { delay, http, HttpResponse } from 'msw'
 import type { Invoice } from '../../../api/types'
 import { appendixAInvoice, makeInvoice } from '../../../test/fixtures'
 import { mockMatchMedia } from '../../../test/mockMatchMedia'
@@ -271,6 +271,22 @@ describe('InvoiceListPage', () => {
     expect(requests.filter((query) => query.fromDate)).toEqual([])
   })
 
+  it('does not apply a keyword typed just before Clear filters', async () => {
+    const requests = serveInvoices([appendixAInvoice])
+    const user = userEvent.setup()
+    const { router } = renderApp('/invoices?status=Overdue', { signedIn: true })
+    await screen.findByRole('link', { name: 'IV1780488206995' })
+
+    // The click comes before the pause that would apply the keyword.
+    await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'iv1')
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await letTimePass(400)
+
+    expect(router.state.location.search).toBe('')
+    expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('')
+    expect(requests.filter((query) => query.keyword)).toEqual([])
+  })
+
   it('clears a date draft with the Clear filters button of an empty list too', async () => {
     serveInvoices([])
     const user = userEvent.setup()
@@ -307,6 +323,31 @@ describe('InvoiceListPage', () => {
 
     expect(await screen.findByText('No invoices yet')).toBeInTheDocument()
     expect(router.state.location.search).toBe('')
+  })
+
+  it('shows the loading state, not "No invoices yet", while the unfiltered list loads', async () => {
+    server.use(
+      http.get('/api/invoices', async ({ request }) => {
+        if (new URL(request.url).searchParams.get('status')) {
+          return HttpResponse.json({ data: [], paging: { page: 1, pageSize: 10, total: 0 } })
+        }
+        await delay(150)
+        return HttpResponse.json({
+          data: [appendixAInvoice],
+          paging: { page: 1, pageSize: 10, total: 1 },
+        })
+      }),
+    )
+    const user = userEvent.setup()
+    renderApp('/invoices?status=Paid', { signedIn: true })
+    const emptyState = (await screen.findByText('No invoices match your filters')).parentElement!
+
+    await user.click(within(emptyState).getByRole('button', { name: 'Clear filters' }))
+
+    // Meanwhile the empty answer of the old filter is only a placeholder.
+    expect(await screen.findByRole('status', { name: 'Loading invoices' })).toBeInTheDocument()
+    expect(screen.queryByText('No invoices yet')).not.toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'IV1780488206995' })).toBeInTheDocument()
   })
 
   it('leads back to page 1 from a page past the end', async () => {
