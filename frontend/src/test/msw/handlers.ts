@@ -5,8 +5,9 @@ import { USER_PASSWORD, userFixture } from '../fixtures'
 const unauthorized = { statusCode: 401, message: 'Unauthorized', error: 'Unauthorized' }
 
 /**
- * The API as every test starts with it: nobody is signed in, and the seeded
- * credentials sign in. Tests add or replace handlers with `server.use`.
+ * The API as every test starts with it: nobody is signed in, the seeded
+ * credentials sign in, and there are no Invoices. Tests add or replace
+ * handlers with `server.use`.
  */
 export const handlers = [
   http.get('/api/auth/me', () => HttpResponse.json(unauthorized, { status: 401 })),
@@ -26,4 +27,7 @@ export const handlers = [
     )
   }),
   http.post('/api/auth/logout', () => new HttpResponse(null, { status: 204 })),
+  http.get('/api/invoices', () =>
+    HttpResponse.json({ data: [], paging: { page: 1, pageSize: 10, total: 0 } }),
+  ),
 ]
