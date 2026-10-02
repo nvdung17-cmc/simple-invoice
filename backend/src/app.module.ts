@@ -8,6 +8,7 @@ import {
 } from './config/env.validation.js';
 import { buildDataSourceOptions } from './database/data-source.js';
 import { HealthModule } from './health/health.module.js';
+import { InvoicesModule } from './invoices/invoices.module.js';
 
 /**
  * Root module: validated configuration, TypeORM (pending migrations run at
@@ -25,6 +26,7 @@ import { HealthModule } from './health/health.module.js';
     }),
     HealthModule,
     AuthModule,
+    InvoicesModule,
   ],
 })
 export class AppModule {}

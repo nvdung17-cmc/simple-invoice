@@ -1,0 +1,52 @@
+import { validateSync } from 'class-validator';
+import { IsDateOnly, IsOnOrAfter } from './validators.js';
+
+class DateRange {
+  @IsDateOnly()
+  start: unknown;
+
+  @IsDateOnly()
+  @IsOnOrAfter('start')
+  end: unknown;
+}
+
+function messagesFor(start: unknown, end: unknown): string[] {
+  const range = Object.assign(new DateRange(), { start, end });
+  return validateSync(range).flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+}
+
+describe('IsDateOnly', () => {
+  it('accepts real YYYY-MM-DD dates', () => {
+    expect(messagesFor('2026-02-28', '2028-02-29')).toEqual([]);
+  });
+
+  it.each(['2026-02-30', '2026-6-3', '03/06/2026', 20260603, null])(
+    'rejects %s',
+    (value) => {
+      expect(messagesFor(value, '2026-12-31')).toEqual([
+        'start must be a valid date in YYYY-MM-DD format',
+      ]);
+    },
+  );
+});
+
+describe('IsOnOrAfter', () => {
+  it('accepts the same day and later days', () => {
+    expect(messagesFor('2026-06-03', '2026-06-03')).toEqual([]);
+    expect(messagesFor('2026-06-03', '2026-07-03')).toEqual([]);
+  });
+
+  it('rejects an earlier day with a message that names both properties', () => {
+    expect(messagesFor('2026-06-03', '2026-06-02')).toEqual([
+      'end must be on or after start',
+    ]);
+  });
+
+  it('leaves an invalid date to IsDateOnly', () => {
+    expect(messagesFor('not-a-date', '2026-06-02')).toEqual([
+      'start must be a valid date in YYYY-MM-DD format',
+    ]);
+  });
+});
