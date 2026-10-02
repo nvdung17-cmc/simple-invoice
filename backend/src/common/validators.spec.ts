@@ -1,5 +1,10 @@
 import { validateSync } from 'class-validator';
-import { IsDateOnly, IsOnOrAfter, NoNulCharacter } from './validators.js';
+import {
+  IsDateOnly,
+  IsOnOrAfter,
+  MaxDecimalPlaces,
+  NoNulCharacter,
+} from './validators.js';
 
 class DateRange {
   @IsDateOnly()
@@ -82,4 +87,34 @@ describe('NoNulCharacter', () => {
     expect(nulMessagesFor(null)).toEqual([]);
     expect(nulMessagesFor(42)).toEqual([]);
   });
+});
+
+class Money {
+  @MaxDecimalPlaces(2)
+  amount: unknown;
+}
+
+function moneyMessages(amount: unknown): string[] {
+  return validateSync(Object.assign(new Money(), { amount })).flatMap((error) =>
+    Object.values(error.constraints ?? {}),
+  );
+}
+
+describe('MaxDecimalPlaces', () => {
+  it.each([0, 10, 19.99, 0.01, 1_000_000])('accepts %s', (amount) => {
+    expect(moneyMessages(amount)).toEqual([]);
+  });
+
+  it.each([1.005, 0.001, 1e-7])('rejects %s', (amount) => {
+    expect(moneyMessages(amount)).toEqual([
+      'amount must have at most 2 decimal places',
+    ]);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, '1.005', null])(
+    'leaves %s to @IsNumber',
+    (amount) => {
+      expect(moneyMessages(amount)).toEqual([]);
+    },
+  );
 });

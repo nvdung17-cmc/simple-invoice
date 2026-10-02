@@ -3,6 +3,7 @@ import {
   ValidateBy,
   type ValidationOptions,
 } from 'class-validator';
+import { Decimal } from 'decimal.js';
 import { isIsoDate } from './iso-date.js';
 
 /** A real calendar date in YYYY-MM-DD format: 2026-02-30 is rejected. */
@@ -49,6 +50,35 @@ export function IsOnOrAfter(
         defaultMessage: buildMessage(
           (eachPrefix) =>
             `${eachPrefix}$property must be on or after $constraint1`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}
+
+/**
+ * A number with at most `places` decimal places, counted exactly with Decimal
+ * (class-validator's own maxDecimalPlaces option fails on values such as 1e-7).
+ * Values that are not finite numbers pass, because @IsNumber reports those.
+ */
+export function MaxDecimalPlaces(
+  places: number,
+  validationOptions?: ValidationOptions,
+): PropertyDecorator {
+  return ValidateBy(
+    {
+      name: 'maxDecimalPlaces',
+      constraints: [places],
+      validator: {
+        validate: (value: unknown) =>
+          typeof value !== 'number' ||
+          !Number.isFinite(value) ||
+          new Decimal(value).decimalPlaces() <= places,
+        defaultMessage: buildMessage(
+          (eachPrefix) =>
+            `${eachPrefix}$property must have at most $constraint1 decimal places`,
           validationOptions,
         ),
       },

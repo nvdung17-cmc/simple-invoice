@@ -1,8 +1,16 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, In, Repository } from 'typeorm';
+import { Decimal } from 'decimal.js';
+import { Brackets, In, QueryFailedError, Repository } from 'typeorm';
 import { ClockService } from '../common/clock.service.js';
+import { CURRENCY_SYMBOLS } from './domain/currencies.js';
 import { STATUS_CRITERIA } from './domain/invoice-status.js';
+import { calculateInvoiceTotals } from './domain/invoice-totals.js';
+import { CreateInvoiceDto } from './dto/create-invoice.dto.js';
 import { InvoiceListResponseDto } from './dto/invoice-list-response.dto.js';
 import { InvoiceDto } from './dto/invoice.dto.js';
 import {
@@ -12,6 +20,9 @@ import {
 import { InvoiceItem } from './entities/invoice-item.entity.js';
 import { Invoice } from './entities/invoice.entity.js';
 import { toInvoiceDto } from './invoice.mapper.js';
+
+/** The unique index on lower(invoice_number): the only uniqueness check. */
+export const INVOICE_NUMBER_UNIQUE_INDEX = 'invoices_invoice_number_lower_uq';
 
 /** The whitelist of sort keys. Without sortBy, the list is sorted by creation time. */
 const SORT_PROPERTIES: Record<SortField | 'createdAt', keyof Invoice> = {
@@ -26,7 +37,17 @@ export function escapeLike(keyword: string): string {
   return keyword.replace(/[\\%_]/g, '\\$&');
 }
 
-/** Reads Invoices. Each request reads "today" once, so every row agrees on Overdue. */
+/** A PostgreSQL unique violation (23505) on the given constraint or index. */
+function isUniqueViolation(error: unknown, constraint: string): boolean {
+  if (!(error instanceof QueryFailedError)) return false;
+  const { code, constraint: violated } = error.driverError as {
+    code?: unknown;
+    constraint?: unknown;
+  };
+  return code === '23505' && violated === constraint;
+}
+
+/** Reads and creates Invoices. Each request reads "today" once, so every row agrees on Overdue. */
 @Injectable()
 export class InvoicesService {
   constructor(
@@ -97,6 +118,64 @@ export class InvoicesService {
     });
     if (!invoice) throw new NotFoundException('Invoice not found');
     return toInvoiceDto(invoice, this.clock.today());
+  }
+
+  /**
+   * Creates a Draft Invoice with its one item (spec §5.3, create flow). The
+   * totals are computed here, never taken from the client. `save` writes the
+   * Invoice and its item in one transaction. The unique index is the only
+   * uniqueness check, so two concurrent requests cannot both succeed.
+   */
+  async create(dto: CreateInvoiceDto, createdBy: string): Promise<InvoiceDto> {
+    const [item] = dto.items;
+    const totals = calculateInvoiceTotals({
+      items: [{ quantity: item.quantity, rate: item.rate }],
+      taxRate: dto.taxRate,
+      discount: dto.discount,
+    });
+    const invoice = this.invoices.create({
+      invoiceNumber: dto.invoiceNumber,
+      invoiceReference: dto.invoiceReference ?? null,
+      invoiceDate: dto.invoiceDate,
+      dueDate: dto.dueDate,
+      currency: dto.currency,
+      currencySymbol: CURRENCY_SYMBOLS[dto.currency],
+      description: dto.description ?? null,
+      status: 'Draft',
+      customerFullname: dto.customer.fullname,
+      customerEmail: dto.customer.email,
+      customerMobileNumber: dto.customer.mobileNumber ?? null,
+      customerAddress: dto.customer.address ?? null,
+      taxRate: new Decimal(dto.taxRate),
+      invoiceSubTotal: totals.subTotal,
+      totalTax: totals.taxAmount,
+      totalDiscount: totals.discount,
+      totalAmount: totals.totalAmount,
+      totalPaid: totals.totalPaid,
+      balanceAmount: totals.balanceAmount,
+      createdBy,
+      items: [
+        this.items.create({
+          name: item.name,
+          quantity: item.quantity,
+          rate: new Decimal(item.rate),
+        }),
+      ],
+    });
+
+    let saved: Invoice;
+    try {
+      saved = await this.invoices.save(invoice);
+    } catch (error) {
+      if (isUniqueViolation(error, INVOICE_NUMBER_UNIQUE_INDEX)) {
+        throw new ConflictException(
+          `Invoice number ${dto.invoiceNumber} already exists`,
+        );
+      }
+      throw error;
+    }
+    // Reload, so the response has the database values and the computed Status.
+    return this.findOne(saved.invoiceId);
   }
 
   /** Loads the items of a whole page in one query (no N+1). */

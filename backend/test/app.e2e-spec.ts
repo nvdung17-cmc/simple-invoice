@@ -79,4 +79,51 @@ describe('HTTP foundation (e2e)', () => {
       .expect(400);
     expect(res.body).toMatchObject({ statusCode: 400, error: 'Bad Request' });
   });
+
+  it('documents every endpoint, with Bearer as the only security scheme', async () => {
+    interface Operation {
+      summary?: string;
+      tags?: string[];
+      security?: unknown;
+      responses: Record<string, unknown>;
+    }
+    const doc = (await request(server).get('/api/docs-json').expect(200))
+      .body as {
+      paths: Record<string, Record<string, Operation>>;
+      components: { securitySchemes: unknown };
+    };
+
+    expect(Object.keys(doc.paths).sort()).toEqual([
+      '/auth/login',
+      '/auth/logout',
+      '/auth/me',
+      '/health',
+      '/invoices',
+      '/invoices/{id}',
+    ]);
+    expect(doc.components.securitySchemes).toEqual({
+      bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+    });
+    for (const [path, operations] of Object.entries(doc.paths)) {
+      for (const [method, operation] of Object.entries(operations)) {
+        expect(operation.summary, `${method} ${path}`).toBeTruthy();
+        expect(operation.tags, `${method} ${path}`).toHaveLength(1);
+      }
+    }
+
+    const createOperation = doc.paths['/invoices'].post;
+    expect(Object.keys(createOperation.responses).sort()).toEqual([
+      '201',
+      '400',
+      '401',
+      '409',
+    ]);
+    expect(createOperation.security).toEqual([{ bearer: [] }]);
+    expect(
+      Object.keys(doc.paths['/invoices/{id}'].get.responses).sort(),
+    ).toEqual(['200', '400', '401', '404']);
+    expect(Object.keys(doc.paths['/auth/login'].post.responses).sort()).toEqual(
+      ['200', '400', '401', '429'],
+    );
+  });
 });
