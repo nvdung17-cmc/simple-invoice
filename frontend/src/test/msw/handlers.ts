@@ -30,4 +30,10 @@ export const handlers = [
   http.get('/api/invoices', () =>
     HttpResponse.json({ data: [], paging: { page: 1, pageSize: 10, total: 0 } }),
   ),
+  http.get('/api/invoices/:invoiceId', () =>
+    HttpResponse.json(
+      { statusCode: 404, message: 'Invoice not found', error: 'Not Found' },
+      { status: 404 },
+    ),
+  ),
 ]
