@@ -5,6 +5,8 @@ import {
   type StartedPostgreSqlContainer,
 } from '@testcontainers/postgresql';
 import { randomBytes } from 'node:crypto';
+import request from 'supertest';
+import type { App } from 'supertest/types.js';
 import { DataSource } from 'typeorm';
 import { appOptions, applyAppSetup } from '../../src/app.setup.js';
 import { ClockService } from '../../src/common/clock.service.js';
@@ -76,4 +78,32 @@ async function createApp(): Promise<NestExpressApplication> {
   applyAppSetup(app);
   await app.init();
   return app;
+}
+
+let clientCount = 0;
+
+/**
+ * A new client IP (TEST-NET-1) for each call, sent as X-Forwarded-For. The app
+ * trusts the loopback proxy, so every login gets its own throttle bucket and
+ * no test trips the login limit by accident.
+ */
+export function nextClientIp(): string {
+  clientCount += 1;
+  return `192.0.2.${clientCount}`;
+}
+
+/**
+ * Signs in through the API and returns the token for `Authorization: Bearer`.
+ * Only email and password are sent: the API rejects unknown fields with 400.
+ */
+export async function loginAs(
+  server: App,
+  { email, password }: { email: string; password: string } = TEST_USER,
+): Promise<string> {
+  const res = await request(server)
+    .post('/auth/login')
+    .set('X-Forwarded-For', nextClientIp())
+    .send({ email, password })
+    .expect(200);
+  return (res.body as { accessToken: string }).accessToken;
 }

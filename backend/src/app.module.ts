@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from './auth/auth.module.js';
 import {
   type EnvironmentVariables,
   validateEnv,
@@ -23,6 +24,7 @@ import { HealthModule } from './health/health.module.js';
       }),
     }),
     HealthModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
