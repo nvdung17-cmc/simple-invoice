@@ -1,6 +1,6 @@
 # SimpleInvoice — Design Spec
 
-- **Date:** 2026-10-02
+- **Date:** 2026-10-02. Revised the same day while the implementation plan was written and verified: a few details now match the verified behaviour (the logout cookie, the test tooling, the frontend's session states, nginx forwarding and the CI steps).
 - **Source requirements:** *Full Stack Assessment v2.3.1* (101 Digital), file `Assessment_Fullstack_v3.0.0.pdf` (kept outside the repository). **A§x.y** refers to a section of that document; a plain **§x** refers to a section of this spec.
 - **Domain language:** [`CONTEXT.md`](../../CONTEXT.md). Its capitalised terms (Invoice, Customer, User, Status, Stored Status, Overdue, Sub-total, Tax Rate, Tax Amount, Discount, Total Amount, Total Paid, Balance) carry their glossary meaning here.
 - **Decisions:**
@@ -103,14 +103,15 @@ simple-invoice/
 │   │   ├── main.tsx · App.tsx (providers) · routes.tsx · theme.ts
 │   │   ├── api/                    # http.ts (axios instance), auth.ts, invoices.ts, types.ts
 │   │   ├── auth/                   # AuthProvider, useAuth, RequireAuth, LoginPage
-│   │   ├── features/invoices/      # list/, detail/, create/, components/, hooks/, schema.ts
-│   │   ├── components/             # AppLayout, PageHeader, StatusChip, EmptyState, ErrorState, FullPageSpinner
+│   │   ├── features/invoices/      # list/, detail/, create/, hooks/, listParams.ts, schema.ts
+│   │   ├── components/             # AppLayout, PageHeader, StatusChip, EmptyState, ErrorState, FullPageSpinner,
+│   │   │                           # NotFoundPage, SectionCard
 │   │   ├── lib/                    # format.ts (money/date), currencies.ts, dates.ts
 │   │   └── test/                   # setup.ts, msw/ (handlers, server, fixtures), render helpers
-│   ├── nginx.conf · Dockerfile · .dockerignore · .env.example
+│   ├── nginx.conf · security-headers.conf · Dockerfile · .dockerignore · .env.example
 │   └── package.json · tsconfig*.json · vite.config.ts · .oxlintrc.json · .prettierrc
 ├── docs/adr/ · docs/specs/
-├── .github/workflows/ci.yml
+├── .github/workflows/ci.yml · scripts/smoke-test.sh
 ├── CONTEXT.md · README.md · docker-compose.yml · .env.example · .gitignore
 ```
 
@@ -125,10 +126,10 @@ Two throwaway spikes on 2026-10-02 verified these versions together: build, lint
 | Backend language | TypeScript **6.0.3**. TS 7 is excluded because it ships no compiler API, which `nest build` needs. |
 | ORM / DB | TypeORM **1.1.1**, `@nestjs/typeorm` 12.0.2, `pg` 8.23.1, PostgreSQL **17** |
 | Backend libraries | `@nestjs/config` 12.0.1, `@nestjs/jwt` 12.0.2, `@nestjs/passport` 12.0.0 + `passport` 0.7.0 + `passport-jwt` 4.0.1, `@nestjs/swagger` 12.0.2, `@nestjs/terminus` 12.1.0, `@nestjs/throttler` 6.7.1, `class-validator` 0.15.1, `class-transformer` 0.5.1, `bcryptjs` 3.0.3, `decimal.js` 10.6.0, `helmet` 8.3.0, `cookie-parser` 1.4.7 (+ `@types/cookie-parser` 1.4.10), `reflect-metadata` 0.2.2, `rxjs` 7.8.2 |
-| Backend tests | Vitest **4.1.11**, as scaffolded by `nest new`. Decorator metadata works with no plugins. Also `vite-tsconfig-paths` 5.1.4, `@nestjs/testing` 12.1.2, `supertest` 7.3.0, `@testcontainers/postgresql` 12.2.0. |
-| Frontend | React **19.3.0**, Vite **8.3.2**, `@vitejs/plugin-react` 6.1.1, TypeScript **~6.0.2** (template default), React Router **8.4.0**, TanStack Query **5.104.0**, React Hook Form 7.89.0, Zod **4.6.5**, `@hookform/resolvers` 5.9.1, axios 1.20.0, MUI **9.4.0** + `@mui/icons-material` 9.4.0 + `@emotion/react` 11.14.0 + `@emotion/styled` 11.14.1, notistack 3.0.2, `@fontsource/roboto` 5.3.0 |
+| Backend tests | Vitest **4.1.11**, as scaffolded by `nest new`. Decorator metadata works with no plugins. Also `@vitest/coverage-v8` 4.1.11, `@nestjs/testing` 12.1.2, `supertest` 7.3.0, `@testcontainers/postgresql` 12.2.0. |
+| Frontend | React **19.3.0**, Vite **8.3.2**, `@vitejs/plugin-react` 6.1.1, TypeScript **6.0.3** (pinned exactly, like the backend), React Router **8.4.0**, TanStack Query **5.104.0**, React Hook Form 7.89.0, Zod **4.6.5**, `@hookform/resolvers` 5.9.1, axios 1.20.0, MUI **9.4.0** + `@mui/icons-material` 9.4.0 + `@emotion/react` 11.14.0 + `@emotion/styled` 11.14.1, notistack 3.0.2, `@fontsource/roboto` 5.3.0 |
 | Frontend tests | Vitest **5.0.3**, jsdom 30.1.1, `@testing-library/react` 16.3.3, `@testing-library/dom` 10.4.2, `@testing-library/user-event` 14.6.7, `@testing-library/jest-dom` 7.0.1, MSW **3.0.1** |
-| Lint / format | oxlint (both official scaffolds now generate it; type-aware on the backend) + Prettier |
+| Lint / format | oxlint (both official scaffolds now generate it; type-aware on the backend; the frontend fails on warnings with `--deny-warnings`) + Prettier |
 
 `helmet`, `cookie-parser` and `@fontsource/roboto` were not part of the spikes. Their versions above were the latest on npm on 2026-10-02.
 
@@ -139,6 +140,7 @@ Two throwaway spikes on 2026-10-02 verified these versions together: build, lint
   - Circular entity relations use `Relation<T>`.
   - **DTO classes must be value imports, never `import type`.** Otherwise the design-time metadata becomes `Function` and the `ValidationPipe` silently stops validating.
 - `import { Decimal } from 'decimal.js'`. The default import fails with TS2351.
+- class-transformer's `@Type()` calls `Reflect.getMetadata` as soon as the class is defined. Nest and TypeORM load `reflect-metadata`, but the env schema also runs without them (in its unit test), so it imports `reflect-metadata` itself.
 - `@nestjs/jwt`: pass `expiresIn` as a **number of seconds**. jsonwebtoken reads a bare string such as `"3600"` as milliseconds.
 - **TypeORM 1.x:**
   - `numeric` hydrates as a string, so a `ValueTransformer` maps it to `Decimal`.
@@ -337,8 +339,10 @@ Money fields are JSON numbers rounded to 2 decimal places. Optional fields that 
 | `sortBy` | `invoiceDate` \| `dueDate` \| `totalAmount` | none: sort by creation time (`created_at`) |
 | `ordering` | `ASC` \| `DESC` (case-insensitive); applies to whichever sort key is in effect | `DESC` (so the default is newest first) |
 | `status` | `Draft` \| `Pending` \| `Paid` \| `Overdue` (case-insensitive) | none |
-| `keyword` | trimmed string ≤ 100; empty is ignored | none |
+| `keyword` | trimmed string ≤ 100 | none |
 | `fromDate`, `toDate` | real `YYYY-MM-DD` dates; filter `invoice_date` inclusively; `fromDate > toDate` returns 400 `"toDate must be on or after fromDate"` | none |
+
+A blank value of any optional parameter (for example `keyword=`, `status=` or `fromDate=`) counts as absent.
 
 Query behaviour:
 - **Keyword:** `(invoice_number ILIKE :kw OR customer_fullname ILIKE :kw)`, where `:kw = %escaped%`; the characters `\`, `%` and `_` in the keyword are escaped.
@@ -385,7 +389,7 @@ Query behaviour:
   2. otherwise, the `access_token` cookie, **only when the request carries `X-Requested-With: XMLHttpRequest`**.
 
   `validate(payload)` reloads the User and returns 401 if they no longer exist. A missing, invalid or expired token gives 401 `{ statusCode: 401, message: "Unauthorized", error: "Unauthorized" }`.
-- **Logout** is guarded like any other route. It clears the cookie (same attributes, `Max-Age=0`) and returns 204. Because it is guarded, a cross-site form cannot log a User out: a cookie without the header gets 401. The SPA treats logout as fire-and-forget: it signs out locally whatever the response.
+- **Logout** is guarded like any other route. It clears the cookie (same attributes, with `Expires=Thu, 01 Jan 1970 00:00:00 GMT`, as Express's `res.clearCookie` sends it) and returns 204. Because it is guarded, a cross-site form cannot log a User out: a cookie without the header gets 401. The SPA treats logout as fire-and-forget: it signs out locally whatever the response.
 - **Hardening:**
   - `NestFactory.create(AppModule, { bodyParser: false })`, then register only a JSON body parser (100 kB limit). Form-encoded and `text/plain` bodies are never parsed, so they fail validation with 400.
   - `helmet()`, `cookie-parser`, and `app.set('trust proxy', TRUST_PROXY)` so the login throttle sees the real client IP behind nginx.
@@ -492,13 +496,13 @@ The router is a React Router 8 data router; the app's `createBrowserRouter` and 
 
 ### 6.2 Session handling (ADR-0002)
 
-- **The axios instance** (`api/http.ts`) uses `baseURL = import.meta.env.VITE_API_BASE_URL ?? '/api'` and sends `X-Requested-With: XMLHttpRequest` with every request. It never reads, stores or sends the token itself.
+- **The axios instance** (`api/http.ts`) uses `baseURL = import.meta.env.VITE_API_BASE_URL || '/api'` (an empty value also falls back) and sends `X-Requested-With: XMLHttpRequest` with every request. It never reads, stores or sends the token itself.
 - **`AuthProvider`:**
-  - **State** is `checking | authenticated | anonymous`, plus `user`.
+  - **State** is `checking | authenticated | anonymous | signedOut`, plus `user`. `signedOut` means that the User logged out, so the next sign-in starts at the Invoice list.
   - **On mount** it calls `GET /auth/me`. 200 means authenticated; any other outcome (401, network error) means anonymous. While checking, it shows `FullPageSpinner`, so the login screen never flashes.
   - **`login()`** posts the credentials, stores only `user`, and ignores `accessToken`.
-  - **`logout()`** calls `POST /auth/logout` and ignores the result. It then clears the query cache, sets the state to anonymous, and navigates to `/login`.
-- **`RequireAuth`:** when anonymous, `<Navigate to="/login" replace state={{ from: location }}>`.
+  - **`logout()`** calls `POST /auth/logout` and ignores the result. It then clears the query cache and sets the state to `signedOut`. It does not navigate: `RequireAuth` does that.
+- **`RequireAuth`:** when anonymous, `<Navigate to="/login" replace state={{ from: location }}>`. When `signedOut`, the same redirect without `from`, so a sign-in after a logout opens the Invoice list.
 - **Session expiry.** A response interceptor watches every request except `/auth/login`, `/auth/me` and `/auth/logout`. On a 401 it calls `onUnauthorized`, which:
   1. sets the state to anonymous;
   2. clears the query cache;
@@ -533,7 +537,7 @@ The router is a React Router 8 data router; the app's `createBrowserRouter` and 
 - **State:**
   - The URL query string is the single source of truth: `page, pageSize, sortBy, ordering, status, keyword, fromDate, toDate`.
   - `useInvoiceListParams()` parses it with Zod (an invalid value falls back to its default) and resets `page` to 1 whenever a filter changes.
-  - TanStack Query fetches with key `['invoices', params]` and `placeholderData: keepPreviousData`. A thin `LinearProgress` shows while it refetches.
+  - TanStack Query fetches with key `['invoices', 'list', params]` and `placeholderData: keepPreviousData`. A thin `LinearProgress` shows while it refetches.
 - **Desktop (≥ md):**
   - A table with the columns Invoice number (a link), Customer, Invoice date, Due date, Total (right-aligned, formatted with the currency symbol) and Status (a chip).
   - `TableSortLabel` on Invoice date, Due date and Total, kept in sync with the Sort controls.
@@ -552,7 +556,7 @@ The router is a React Router 8 data router; the app's `createBrowserRouter` and 
   - **Customer:** name, email (a mailto link), mobile, address.
   - **Invoice Items** table: name, quantity, Rate, amount.
   - **Summary:** Sub-total, Tax (`taxRate` %), Discount, Total Amount, Total Paid, and **Balance**, emphasised.
-- **States:** 404 or 400 shows "Invoice not found" with a back link; loading shows skeletons; an error shows Retry.
+- **States:** 404 or 400 shows "Invoice not found" and "There is no invoice at this address. Check the link, or go back to the list." with a back link; loading shows skeletons; an error shows Retry.
 
 **`CreateInvoicePage`:**
 - **Layout:** cards for Customer, Invoice details, Item, and Tax & discount, in one column on mobile and two on desktop.
@@ -561,7 +565,7 @@ The router is a React Router 8 data router; the app's `createBrowserRouter` and 
   - Due date: today + 30 days.
   - Currency AUD, Tax Rate 10, Discount 0, quantity 1.
 - **Inputs:** both dates are native date inputs (`type="date"`), and the currency is a select over the supported list.
-- **Validation.** The Zod schema mirrors §5.3, including `dueDate ≥ invoiceDate`. Fields are validated on blur and on submit, and the first invalid field gets focus.
+- **Validation.** The Zod schema mirrors §5.3, including `dueDate ≥ invoiceDate`, except two rules that only the server can check: Invoice Number uniqueness (only the database can tell) and the Discount limit (it depends on the server's decimal rounding). Their server messages appear on their fields (see Submit). Fields are validated on blur and on submit, and the first invalid field gets focus.
 - **Submit:**
   - The button is disabled while pending.
   - **201:** invalidate `['invoices']`, show the toast "Invoice <number> created", and navigate to `/invoices`. The new Invoice appears at the top because the default sort is newest first.
@@ -579,12 +583,13 @@ The router is a React Router 8 data router; the app's `createBrowserRouter` and 
 
 ### 6.5 nginx (frontend container)
 
-- **Routing:** `try_files $uri /index.html`, and `location /api/ { proxy_pass http://backend:3000/; }` with `X-Forwarded-For`/`-Proto`.
+- **Routing:** `try_files $uri /index.html`, and `location /api/ { proxy_pass http://backend:3000/; }` with `X-Forwarded-Proto` and `X-Forwarded-For $remote_addr`. nginx is the edge, so it overwrites `X-Forwarded-For` instead of appending to it: a client cannot choose the address that the login throttle counts.
 - **Compression:** gzip.
 - **Caching:** `Cache-Control: public, max-age=31536000, immutable` for `/assets/*`; `no-cache` for `index.html`.
 - **Security headers:**
   - `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'`. `'unsafe-inline'` applies to styles only, because Emotion injects style tags.
   - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `X-Frame-Options: DENY`, and a minimal `Permissions-Policy`.
+  - nginx sends them with the SPA's responses (`/` and `/assets/`). API responses pass through with the API's own helmet headers, so no header appears twice.
 
 ## 7. Testing strategy
 
@@ -609,7 +614,7 @@ The router is a React Router 8 data router; the app's `createBrowserRouter` and 
 
 Each run boots `AppModule` through the shared `app.setup.ts` against a fresh container, so the real migrations, real seed and real HTTP pipeline are under test. A fixed clock makes Overdue deterministic, and the seed runs with the same fixed date.
 
-Each e2e file logs in once and reuses the token. The throttle test has its own app instance, so the login limit never trips other tests.
+Each e2e file logs in once and reuses the token. Every login sends its own client IP in `X-Forwarded-For`, which the app trusts as it trusts the bundled nginx (`TRUST_PROXY`). So each login has its own throttle bucket, and the login limit never trips another test. The throttle test reuses one IP on purpose.
 
 - **Auth:**
   - Login 200 with the cookie flags (`HttpOnly`, `SameSite=Strict`, `Max-Age`); wrong password 401; invalid email 400.
@@ -639,13 +644,14 @@ Each e2e file logs in once and reuses the token. The throttle test has its own a
 
 ### 7.4 CI (`.github/workflows/ci.yml`, on push and PR)
 
-1. **backend:** `npm ci` → lint → build → unit tests → e2e tests (Docker is available on `ubuntu-latest`).
-2. **frontend:** `npm ci` → lint → type-check → tests → build.
+The three jobs run in parallel.
+
+1. **backend:** `npm ci` → lint → Prettier check → type-check → build → unit tests → e2e tests (Docker is available on `ubuntu-latest`).
+2. **frontend:** `npm ci` → lint → Prettier check → type-check → tests → build.
 3. **compose-smoke:**
-   1. `docker compose up -d --build`, then wait until the backend is healthy.
-   2. Through the frontend container: `GET /` returns `index.html`, and `POST /api/auth/login` succeeds.
-   3. An authenticated `GET /api/invoices` returns data.
-   4. `docker compose down -v`.
+   1. `docker compose up -d --build --wait`, with no `.env` file: compose waits until every service is healthy.
+   2. `scripts/smoke-test.sh`, through the frontend container: `GET /` returns the SPA with its security headers; `GET /api/invoices` without a session returns 401; `POST /api/auth/login` sets the session cookie; `GET /api/auth/me` returns the User; an authenticated `GET /api/invoices` finds the seeded Appendix A Invoice; logout ends the session; and the backend serves the OpenAPI document.
+   3. The container logs on failure, and `docker compose down -v` always.
 
 ## 8. Delivery
 
@@ -742,7 +748,7 @@ Each entry gives the decision, then its justification.
 | A port conflict on a reviewer's machine (3000, 5432, 8080) | Host ports overridable through env; documented in the README |
 | Overdue depends on the day the stack runs | Seed dates are relative to the seed day; tests use a fixed clock |
 | The cookie path and the Bearer path drift apart | Each has its own e2e tests (§7.2) |
-| helmet's default Content-Security-Policy blocks part of Swagger UI | Check `localhost:3000/api/docs` in Chrome during implementation; if needed, relax CSP for the docs route only |
+| helmet's default Content-Security-Policy blocks part of Swagger UI | Swagger UI's files are same-origin, which helmet's CSP allows. Only `upgrade-insecure-requests` is dropped, because the stack runs over plain http://localhost. `localhost:3000/api/docs` is checked in Chrome during the live test. |
 
 ## 12. Glossary and decision references
 
