@@ -65,6 +65,24 @@ describe('LoginPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.')
   })
 
+  it('says so when the credentials cannot be valid, such as a password over 72 bytes', async () => {
+    server.use(
+      http.post('/api/auth/login', () =>
+        HttpResponse.json(
+          {
+            statusCode: 400,
+            message: ['password must be at most 72 bytes'],
+            error: 'Bad Request',
+          },
+          { status: 400 },
+        ),
+      ),
+    )
+    renderApp('/login')
+    await signInWith(userFixture.email, 'a'.repeat(73))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.')
+  })
+
   it('says so when there were too many attempts', async () => {
     server.use(
       http.post('/api/auth/login', () =>

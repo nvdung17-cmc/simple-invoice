@@ -23,6 +23,8 @@ type LoginOutput = z.output<typeof loginSchema>
 
 function loginErrorMessage(error: unknown): string {
   switch (errorStatus(error)) {
+    // 400: credentials that cannot be valid, such as a password over 72 bytes.
+    case 400:
     case 401:
       return 'Invalid email or password.'
     case 429:
