@@ -111,7 +111,7 @@ You need Node.js 24.15 or later (22.22.3 or a later 22.x also works; the Nest CL
    cd backend
    cp .env.example .env
    # Edit .env: put the database password into DATABASE_URL, and set
-   # JWT_SECRET (openssl rand -base64 48) and SEED_USER_PASSWORD (8-72 bytes).
+   # JWT_SECRET (openssl rand -base64 48) and SEED_USER_PASSWORD (at least 8 characters, at most 72 bytes).
    npm ci
    npm run seed        # compiles the code, applies the migrations, seeds the demo data
    npm run start:dev   # starts the API and restarts it when a file changes
@@ -340,6 +340,7 @@ Other main choices:
 - The Discount is an amount (Appendix A: 2000 + 200 − 20 = 2180).
 - Each Invoice stores its Tax Rate, so the detail page shows the rate that was applied.
 - The API paths have no global prefix, exactly as the assessment lists them. Swagger is at `/api/docs`.
+- The `db` service runs the official `postgres:17-alpine` image unchanged, so only the two apps this repository builds, `backend` and `frontend`, have a Dockerfile.
 - The list response's `paging` uses the field names of the assessment's API section (`page`, `pageSize`, `total`), not those of Appendix A's mock (`pageNumber`, `totalRecords`).
 - The list's search, filters, sort order and page live in the URL, so the back button and a shared link restore the same view.
 
