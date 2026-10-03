@@ -126,7 +126,7 @@ describe('HTTP foundation (e2e)', () => {
       doc.components.schemas.ErrorResponseDto.properties.message.description,
     ).toContain('per failed rule');
     // CONTEXT.md avoids this word because it reads as Customer; the Swagger text must too.
-    expect(JSON.stringify(doc)).not.toMatch(/\bclient\b/i);
+    expect(JSON.stringify(doc)).not.toMatch(/\bclients?\b/i);
 
     const createOperation = doc.paths['/invoices'].post;
     expect(Object.keys(createOperation.responses).sort()).toEqual([
