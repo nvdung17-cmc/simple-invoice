@@ -85,12 +85,18 @@ describe('HTTP foundation (e2e)', () => {
       summary?: string;
       tags?: string[];
       security?: unknown;
-      responses: Record<string, unknown>;
+      responses: Record<string, { description?: string }>;
     }
     const doc = (await request(server).get('/api/docs-json').expect(200))
       .body as {
       paths: Record<string, Record<string, Operation>>;
-      components: { securitySchemes: unknown };
+      components: {
+        securitySchemes: unknown;
+        schemas: Record<
+          string,
+          { properties: Record<string, { description?: string }> }
+        >;
+      };
     };
 
     expect(Object.keys(doc.paths).sort()).toEqual([
@@ -108,8 +114,19 @@ describe('HTTP foundation (e2e)', () => {
       for (const [method, operation] of Object.entries(operations)) {
         expect(operation.summary, `${method} ${path}`).toBeTruthy();
         expect(operation.tags, `${method} ${path}`).toHaveLength(1);
+        for (const [code, response] of Object.entries(operation.responses)) {
+          expect(
+            response.description,
+            `${method} ${path} ${code}`,
+          ).toBeTruthy();
+        }
       }
     }
+    expect(
+      doc.components.schemas.ErrorResponseDto.properties.message.description,
+    ).toContain('per failed rule');
+    // CONTEXT.md avoids this word because it reads as Customer; the Swagger text must too.
+    expect(JSON.stringify(doc)).not.toMatch(/\bclients?\b/i);
 
     const createOperation = doc.paths['/invoices'].post;
     expect(Object.keys(createOperation.responses).sort()).toEqual([

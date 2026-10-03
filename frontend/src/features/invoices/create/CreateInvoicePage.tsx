@@ -28,10 +28,12 @@ import { FormTextField } from './FormTextField'
 
 const dateLabel = { inputLabel: { shrink: true } }
 
+const GENERIC_ERROR = 'Could not create the invoice. Please try again.'
+
 /**
  * Creates a Draft Invoice with one item (spec §6.3). The form checks what it
  * can; the server computes every total and has the last word. Its answers are
- * shown where the User can act on them: on a field, or above the form.
+ * shown where the User can act on them: on a field, or just above the buttons.
  */
 export function CreateInvoicePage() {
   const navigate = useNavigate()
@@ -66,10 +68,12 @@ export function CreateInvoicePage() {
         fieldErrors.forEach(({ name, message }, index) =>
           setError(name, { message }, { shouldFocus: index === 0 }),
         )
+        // A 400 that names nothing the User can fix must still say that the Invoice was not created.
+        if (fieldErrors.length === 0 && other.length === 0) other.push(GENERIC_ERROR)
         setFormErrors(other)
       } else if (status !== 401) {
         // A 401 means the session expired; AuthProvider already sends the User to sign in.
-        setFormErrors(['Could not create the invoice. Please try again.'])
+        setFormErrors([GENERIC_ERROR])
       }
     },
   })
@@ -82,21 +86,8 @@ export function CreateInvoicePage() {
   return (
     <>
       <PageHeader title="New invoice" />
-      <Box component="form" noValidate onSubmit={handleSubmit(onSubmit)}>
+      <Box component="form" noValidate onSubmit={handleSubmit(onSubmit, () => setFormErrors([]))}>
         <Stack spacing={2}>
-          {formErrors.length > 0 && (
-            <Alert severity="error">
-              {formErrors.length === 1 ? (
-                formErrors[0]
-              ) : (
-                <Box component="ul" sx={{ m: 0, pl: 2 }}>
-                  {formErrors.map((message) => (
-                    <li key={message}>{message}</li>
-                  ))}
-                </Box>
-              )}
-            </Alert>
-          )}
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, md: 6 }}>
               <SectionCard title="Customer">
@@ -156,6 +147,7 @@ export function CreateInvoicePage() {
                       label="Invoice date"
                       type="date"
                       required
+                      rules={{ deps: ['dueDate'] }}
                       slotProps={dateLabel}
                     />
                     <FormTextField
@@ -234,6 +226,19 @@ export function CreateInvoicePage() {
               </SectionCard>
             </Grid>
           </Grid>
+          {formErrors.length > 0 && (
+            <Alert severity="error">
+              {formErrors.length === 1 ? (
+                formErrors[0]
+              ) : (
+                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                  {formErrors.map((message) => (
+                    <li key={message}>{message}</li>
+                  ))}
+                </Box>
+              )}
+            </Alert>
+          )}
           <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
             <Button component={RouterLink} to="/invoices">
               Cancel

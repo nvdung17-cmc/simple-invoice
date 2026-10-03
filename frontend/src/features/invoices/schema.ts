@@ -98,12 +98,18 @@ export const createInvoiceSchema = z
         .max(100, 'Tax rate must be between 0 and 100')
         .refine(hasAtMostTwoDecimals, 'Tax rate must have at most 2 decimal places'),
     ),
-    discount: numberText('Discount').pipe(
-      z
-        .number()
-        .min(0, 'Discount must not be negative')
-        .refine(hasAtMostTwoDecimals, 'Discount must have at most 2 decimal places'),
-    ),
+    // Optional: a blank Discount means 0, as it does for the API.
+    discount: z
+      .string()
+      .trim()
+      .transform((value) => value || '0')
+      .pipe(z.coerce.number<string>('Discount must be a number'))
+      .pipe(
+        z
+          .number()
+          .min(0, 'Discount must not be negative')
+          .refine(hasAtMostTwoDecimals, 'Discount must have at most 2 decimal places'),
+      ),
   })
   .refine((values) => values.dueDate >= values.invoiceDate, {
     message: 'Due date must be on or after the invoice date',

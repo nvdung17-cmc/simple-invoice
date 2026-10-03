@@ -7,7 +7,7 @@ status: accepted
 The spec asks us to "securely store the token on the client side" and scores "Secure JWT implementation" as its own criterion. It also requires stateless JWT access tokens (2.3.3), so a stolen token stays valid until it expires and cannot be revoked. Where the token lives therefore sets how much damage a leak can do.
 
 We keep the token where page JavaScript cannot read it:
-- `POST /auth/login` sets an `access_token` cookie with `HttpOnly`, `SameSite=Strict` and `Path=/`. Its `Max-Age` equals `JWT_EXPIRES_IN`, and `Secure` follows `COOKIE_SECURE` (`auto` = on behind TLS).
+- `POST /auth/login` sets an `access_token` cookie with `HttpOnly`, `SameSite=Strict` and `Path=/`. Its `Max-Age` equals `JWT_EXPIRES_IN`, and `Secure` follows `COOKIE_SECURE` (`auto` = on when a trusted proxy reports HTTPS; the bundled nginx reports plain HTTP, so set `true` when TLS ends in front of it).
 - The login response still returns the JWT in its body, as the spec's endpoint table requires.
 
 There is one passport-jwt strategy and one global guard. The guard accepts the token in either of two ways:

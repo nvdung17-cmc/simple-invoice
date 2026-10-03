@@ -18,10 +18,13 @@ const loginSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 })
 
-type LoginValues = z.infer<typeof loginSchema>
+type LoginInput = z.input<typeof loginSchema>
+type LoginOutput = z.output<typeof loginSchema>
 
 function loginErrorMessage(error: unknown): string {
   switch (errorStatus(error)) {
+    // 400: credentials that cannot be valid, such as a password over 72 bytes.
+    case 400:
     case 401:
       return 'Invalid email or password.'
     case 429:
@@ -34,14 +37,17 @@ function loginErrorMessage(error: unknown): string {
 /** After signing in: back to the page that asked for it, or the Invoice list. */
 function redirectTarget(state: unknown): string {
   const from = (state as { from?: Location } | null)?.from
-  return from ? `${from.pathname}${from.search}${from.hash}` : '/invoices'
+  if (!from) return '/invoices'
+  // A path that starts with // would be an external URL to the router.
+  const pathname = from.pathname.replace(/^\/+/, '/')
+  return `${pathname}${from.search}${from.hash}`
 }
 
 /** The sign-in screen (spec §6.3). A signed-in User is sent on to the app. */
 export function LoginPage() {
   const { status, login } = useAuth()
   const location = useLocation()
-  const { control, handleSubmit } = useForm<LoginValues>({
+  const { control, handleSubmit } = useForm<LoginInput, unknown, LoginOutput>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   })

@@ -15,7 +15,7 @@ function run(
 
 /**
  * Runs a transform on a field the way class-transformer does: `sent` is what
- * the client sent (in `obj`), and `value` is that after a @Type conversion.
+ * the caller sent (in `obj`), and `value` is that after a @Type conversion.
  */
 function runOnField(
   transform: (params: TransformFnParams) => unknown,

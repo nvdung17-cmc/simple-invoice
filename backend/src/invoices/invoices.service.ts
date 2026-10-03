@@ -80,10 +80,21 @@ export class InvoicesService {
       qb.andWhere('invoice.status IN (:...storedIn)', {
         storedIn: criteria.storedIn,
       });
-      if (criteria.due === 'beforeToday') {
-        qb.andWhere('invoice.dueDate < :today', { today });
-      } else if (criteria.due === 'todayOrLater') {
-        qb.andWhere('invoice.dueDate >= :today', { today });
+      switch (criteria.due) {
+        case 'beforeToday':
+          qb.andWhere('invoice.dueDate < :today', { today });
+          break;
+        case 'todayOrLater':
+          qb.andWhere('invoice.dueDate >= :today', { today });
+          break;
+        case 'any':
+          break;
+        default: {
+          // A new DuePosition fails to compile here, instead of silently
+          // dropping its date condition.
+          const unhandled: never = criteria.due;
+          throw new Error(`Unhandled due position: ${String(unhandled)}`);
+        }
       }
     }
 
@@ -122,7 +133,7 @@ export class InvoicesService {
 
   /**
    * Creates a Draft Invoice with its one item (spec §5.3, create flow). The
-   * totals are computed here, never taken from the client. `save` writes the
+   * totals are computed here, never taken from the request. `save` writes the
    * Invoice and its item in one transaction. The unique index is the only
    * uniqueness check, so two concurrent requests cannot both succeed.
    */

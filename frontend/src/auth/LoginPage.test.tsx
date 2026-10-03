@@ -33,7 +33,7 @@ describe('LoginPage', () => {
     await signInWith(userFixture.email, USER_PASSWORD)
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/invoices'))
-    expect(await screen.findByRole('button', { name: 'Account menu' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'User menu' })).toBeInTheDocument()
   })
 
   it('returns to the page that asked for a sign-in', async () => {
@@ -46,9 +46,40 @@ describe('LoginPage', () => {
     expect(router.state.location.search).toBe('?from=link')
   })
 
+  it('keeps a saved path that starts with // inside the app', async () => {
+    // The router would read `//evil.example/x` as an address on another host.
+    const { router } = renderApp({
+      pathname: '/login',
+      state: { from: { pathname: '//evil.example/x', search: '', hash: '' } },
+    })
+
+    await signInWith(userFixture.email, USER_PASSWORD)
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/evil.example/x'))
+    expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeInTheDocument()
+  })
+
   it('says so when the credentials are wrong', async () => {
     renderApp('/login')
     await signInWith(userFixture.email, 'wrong-password')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.')
+  })
+
+  it('says so when the credentials cannot be valid, such as a password over 72 bytes', async () => {
+    server.use(
+      http.post('/api/auth/login', () =>
+        HttpResponse.json(
+          {
+            statusCode: 400,
+            message: ['password must be at most 72 bytes'],
+            error: 'Bad Request',
+          },
+          { status: 400 },
+        ),
+      ),
+    )
+    renderApp('/login')
+    await signInWith(userFixture.email, 'a'.repeat(73))
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid email or password.')
   })
 

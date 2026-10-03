@@ -313,7 +313,7 @@ All routes are guarded by default; `@Public()` marks the exceptions.
 | POST | `/invoices` | ✓ | **201** `InvoiceDto` with a `Location: /invoices/{id}` header | 400, 401, 409 |
 | GET | `/health` | public | 200 Terminus report `{ status: "ok", info, error, details }`; 503 with `status: "error"` when the database ping fails | none |
 
-**`LoginDto`:** `email` is required, a valid email, at most 255 characters, and trimmed. `password` is required, 1–128 characters, and never trimmed or logged.
+**`LoginDto`:** `email` is required, a valid email, at most 255 characters, and trimmed. `password` is required, 1–128 characters and at most 72 bytes of UTF-8 (bcrypt reads no more), and never trimmed or logged.
 
 **`InvoiceDto`** is the single representation used by the list, the detail view and create. It follows the Appendix A names. The additions are `taxRate`, item `amount`, and `status` as the computed Status.
 
@@ -383,7 +383,7 @@ Query behaviour:
   2. Run `bcrypt.compare` against the stored hash, or against a fixed dummy hash when the User is missing, so timing reveals nothing.
   3. On failure, return **401 `"Invalid email or password"`**.
   4. On success, sign `{ sub, email }` with HS256 and `expiresIn = JWT_EXPIRES_IN` (a number of seconds). Verification pins `algorithms: ['HS256']`.
-  5. Set the cookie `access_token=<jwt>; HttpOnly; SameSite=Strict; Path=/; Max-Age=<JWT_EXPIRES_IN>`. `Secure` follows `COOKIE_SECURE`: `auto` means `req.secure`, so it is off on plain http://localhost and on behind TLS with `trust proxy`.
+  5. Set the cookie `access_token=<jwt>; HttpOnly; SameSite=Strict; Path=/; Max-Age=<JWT_EXPIRES_IN>`. `Secure` follows `COOKIE_SECURE`: `auto` means `req.secure`, so it is off on plain http://localhost and on only when a trusted proxy sends `X-Forwarded-Proto: https`.
 - **The global `JwtAuthGuard`** (passport-jwt) skips `@Public()` routes. Its extractor order is:
   1. an `Authorization: Bearer` header;
   2. otherwise, the `access_token` cookie, **only when the request carries `X-Requested-With: XMLHttpRequest`**.
@@ -461,7 +461,7 @@ These files never hold real values for secrets (`JWT_SECRET`, `POSTGRES_PASSWORD
   4. Insert the Appendix A Invoice verbatim: same `invoiceId`, number, reference, dates, Customer, item id, and amounts (2000 / 200 / 20 / 2180 / 1451.34 / 728.66, Tax Rate 10). Its Stored Status is **Pending**; it is part-paid, and its Overdue is derived.
   5. Insert **40 generated Invoices**, numbered `INV-0001` to `INV-0040`.
 
-  Every insert uses `ON CONFLICT DO NOTHING`, and an Invoice Item is inserted only when its Invoice was. So a second run changes nothing.
+  Every insert uses `ON CONFLICT DO NOTHING`, and an Invoice Item is inserted only when its Invoice was. So a second run inserts nothing; the default User is upserted on every run.
 - **Generated data** is deterministic (a fixed-seed PRNG, no faker library). It is relative to the seed day: "today" from the same clock logic as the API (`APP_TIMEZONE`). Tests pass a fixed date instead.
   - Invoice dates range from today − 180 days to today + 10 days; due dates are the invoice date + {0, 7, 14, 30, 45, 60} days.
   - Stored Statuses are mixed: about 35 % Paid (Total Paid = Total Amount), about 40 % Pending (some part-paid), about 25 % Draft.

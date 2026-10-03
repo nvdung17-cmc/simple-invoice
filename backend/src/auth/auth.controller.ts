@@ -50,10 +50,11 @@ export class AuthController {
     summary: 'Sign in with email and password',
     description:
       'Returns an access token for the Authorization header and sets the same token as the httpOnly `access_token` cookie. ' +
-      'Each client IP gets LOGIN_THROTTLE_LIMIT attempts per LOGIN_THROTTLE_TTL seconds.',
+      'Each source IP address gets LOGIN_THROTTLE_LIMIT attempts per LOGIN_THROTTLE_TTL seconds.',
   })
   @ApiOkResponse({
     type: LoginResponseDto,
+    description: 'The token, its lifetime and the signed-in User',
     headers: {
       'Set-Cookie': {
         description:
@@ -72,7 +73,7 @@ export class AuthController {
   })
   @ApiTooManyRequestsResponse({
     type: ErrorResponseDto,
-    description: 'Too many login attempts from this client',
+    description: 'Too many login attempts from this IP address',
   })
   async login(
     @Body() credentials: LoginDto,
@@ -93,7 +94,7 @@ export class AuthController {
     summary: 'Get the signed-in User',
     description: 'The SPA calls this at start-up to restore the session.',
   })
-  @ApiOkResponse({ type: UserDto })
+  @ApiOkResponse({ type: UserDto, description: 'The signed-in User' })
   @ApiUnauthorizedResponse({
     type: ErrorResponseDto,
     description: 'The token is missing, invalid or expired',

@@ -30,7 +30,7 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm run lint
-      - run: npx prettier --check "src/**/*.ts" "test/**/*.ts"
+      - run: npm run format:check
       - run: npm run typecheck
       - run: npm run build
       - run: npm test

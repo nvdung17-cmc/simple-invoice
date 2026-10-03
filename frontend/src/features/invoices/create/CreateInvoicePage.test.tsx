@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { Invoice } from '../../../api/types'
@@ -85,6 +85,28 @@ describe('CreateInvoicePage', () => {
     expect(
       await screen.findByText('Due date must be on or after the invoice date'),
     ).toBeInTheDocument()
+  })
+
+  it('checks the Due Date again when the Invoice Date changes', async () => {
+    renderApp('/invoices/new', { signedIn: true })
+    const invoiceDate = await screen.findByLabelText(/^Invoice date/)
+    const dueDate = screen.getByLabelText(/^Due date/)
+    const dueDateError = 'Due date must be on or after the invoice date'
+
+    fireEvent.change(dueDate, { target: { value: '2026-10-01' } })
+    fireEvent.blur(dueDate)
+    expect(await screen.findByText(dueDateError)).toBeInTheDocument()
+
+    // An earlier Invoice Date makes the Due Date valid again. The form checks a field once it
+    // has been left (mode onTouched), so leave this one.
+    fireEvent.change(invoiceDate, { target: { value: '2026-09-30' } })
+    fireEvent.blur(invoiceDate)
+    await waitFor(() => expect(screen.queryByText(dueDateError)).not.toBeInTheDocument())
+
+    // A later one makes it invalid again, although the Due Date was not touched. The Invoice
+    // Date is checked on every change now.
+    fireEvent.change(invoiceDate, { target: { value: '2026-10-05' } })
+    expect(await screen.findByText(dueDateError)).toBeInTheDocument()
   })
 
   it('creates the Invoice, says so, and shows it at the top of the list', async () => {
@@ -193,12 +215,48 @@ describe('CreateInvoicePage', () => {
     expect(textbox('Email')).toHaveFocus()
   })
 
-  it('reports an unexpected failure above the form', async () => {
+  it('reports an unexpected failure beside the buttons', async () => {
     answerCreate(500, {
       statusCode: 500,
       message: 'Internal server error',
       error: 'Internal Server Error',
     })
+    const user = userEvent.setup()
+    await openFilledForm(user)
+
+    await user.click(screen.getByRole('button', { name: 'Create invoice' }))
+
+    expect(
+      await screen.findByText('Could not create the invoice. Please try again.'),
+    ).toBeInTheDocument()
+  })
+
+  it('clears the server message when the next submit fails validation', async () => {
+    answerCreate(500, {
+      statusCode: 500,
+      message: 'Internal server error',
+      error: 'Internal Server Error',
+    })
+    const user = userEvent.setup()
+    await openFilledForm(user)
+    await user.click(screen.getByRole('button', { name: 'Create invoice' }))
+    expect(
+      await screen.findByText('Could not create the invoice. Please try again.'),
+    ).toBeInTheDocument()
+
+    await user.clear(textbox('Customer name'))
+    await user.click(screen.getByRole('button', { name: 'Create invoice' }))
+
+    expect(await screen.findByText('Customer name is required')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        screen.queryByText('Could not create the invoice. Please try again.'),
+      ).not.toBeInTheDocument(),
+    )
+  })
+
+  it('falls back to the generic message for a 400 without messages', async () => {
+    answerCreate(400, { statusCode: 400, message: [], error: 'Bad Request' })
     const user = userEvent.setup()
     await openFilledForm(user)
 

@@ -7,7 +7,12 @@ export const BCRYPT_COST = 12;
 /** Hashes and verifies passwords. Shared by the login flow and the seeder. */
 @Injectable()
 export class PasswordHasher {
-  hash(password: string): Promise<string> {
+  async hash(password: string): Promise<string> {
+    // Safety net: the login body and the seed settings already cap a password at
+    // 72 bytes.
+    if (bcrypt.truncates(password)) {
+      throw new Error('bcrypt reads only the first 72 bytes of a password');
+    }
     return bcrypt.hash(password, BCRYPT_COST);
   }
 

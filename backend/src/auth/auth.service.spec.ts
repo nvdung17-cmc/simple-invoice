@@ -67,6 +67,18 @@ describe('AuthService.login', () => {
     expect(jwt.signAsync).not.toHaveBeenCalled();
   });
 
+  it('makes the dummy hash when the service is made, not on the first unknown email', async () => {
+    const { service, hasher } = setup(null, true);
+    expect(hasher.hash).toHaveBeenCalledTimes(1);
+
+    for (const email of ['nobody@example.com', 'someone@example.com']) {
+      await expect(
+        service.login({ email, password: 'Password123!' }),
+      ).rejects.toThrow('Invalid email or password');
+    }
+    expect(hasher.hash).toHaveBeenCalledTimes(1);
+  });
+
   it('still compares a hash for an unknown email, so the timing does not reveal it', async () => {
     const { service, hasher } = setup(null, true);
     await expect(

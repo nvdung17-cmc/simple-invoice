@@ -106,6 +106,19 @@ describe('SeedEnvironmentVariables', () => {
       }),
     ).toThrow(/SEED_USER_EMAIL/);
   });
+
+  it('rejects a password of more than 72 bytes, which bcrypt would cut short', () => {
+    const withPassword = (SEED_USER_PASSWORD: string) =>
+      validateConfig(SeedEnvironmentVariables, {
+        ...seedEnv,
+        SEED_USER_PASSWORD,
+      });
+
+    expect(withPassword('a'.repeat(72)).SEED_USER_PASSWORD).toHaveLength(72);
+    expect(() => withPassword('a'.repeat(73))).toThrow(
+      'SEED_USER_PASSWORD must be at most 72 bytes',
+    );
+  });
 });
 
 describe('parseTrustProxy', () => {

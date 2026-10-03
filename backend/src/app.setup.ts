@@ -25,7 +25,7 @@ export function applyAppSetup(app: NestExpressApplication): void {
   const config =
     app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
 
-  // Behind nginx, req.ip must be the real client (login throttle) and
+  // Behind nginx, req.ip must be the real caller (login throttle) and
   // req.secure must reflect TLS (the cookie's Secure flag).
   app.set(
     'trust proxy',

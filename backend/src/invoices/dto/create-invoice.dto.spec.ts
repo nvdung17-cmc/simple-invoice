@@ -194,7 +194,7 @@ describe('CreateInvoiceDto', () => {
       'property status should not exist',
     ],
     [
-      'a total sent by the client',
+      'a total sent by the caller',
       { totalAmount: 1 },
       'property totalAmount should not exist',
     ],

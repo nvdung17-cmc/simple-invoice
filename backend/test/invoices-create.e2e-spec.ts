@@ -192,7 +192,7 @@ describe('Invoices: create (e2e)', () => {
     );
   });
 
-  it('rejects fields the client may not set, such as the Status or totals', async () => {
+  it('rejects fields the caller may not set, such as the Status or totals', async () => {
     const res = await create({
       ...BODY,
       invoiceNumber: 'INV-EXTRA',

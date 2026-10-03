@@ -17,6 +17,7 @@ import {
   MinLength,
   validateSync,
 } from 'class-validator';
+import { MaxUtf8Bytes } from '../common/validators.js';
 
 /**
  * Environment schema (§5.7), validated at start-up: the API and the seeder
@@ -84,6 +85,7 @@ export class SeedEnvironmentVariables extends DatabaseEnvironmentVariables {
 
   @IsString()
   @Length(8, 128)
+  @MaxUtf8Bytes(72)
   SEED_USER_PASSWORD: string;
 
   @IsString()

@@ -142,3 +142,31 @@ export function MaxCodePoints(
     validationOptions,
   );
 }
+
+/**
+ * The string has at most `max` bytes in UTF-8. bcrypt reads only the first 72
+ * bytes of a password, so a longer one would be accepted and silently cut:
+ * put this on every password that is hashed. A value that is not a string
+ * passes, because @IsString reports that.
+ */
+export function MaxUtf8Bytes(
+  max: number,
+  validationOptions?: ValidationOptions,
+): PropertyDecorator {
+  return ValidateBy(
+    {
+      name: 'maxUtf8Bytes',
+      constraints: [max],
+      validator: {
+        validate: (value: unknown) =>
+          typeof value !== 'string' || Buffer.byteLength(value, 'utf8') <= max,
+        defaultMessage: buildMessage(
+          (eachPrefix) =>
+            `${eachPrefix}$property must be at most $constraint1 bytes`,
+          validationOptions,
+        ),
+      },
+    },
+    validationOptions,
+  );
+}

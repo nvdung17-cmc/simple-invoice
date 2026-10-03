@@ -5,7 +5,7 @@ import type { App } from 'supertest/types.js';
 import { DEFAULT_USER_ID } from '../src/database/seed/appendix-a.js';
 import {
   loginAs,
-  nextClientIp,
+  nextSourceIp,
   startTestApp,
   stopTestApp,
   TEST_USER,
@@ -58,18 +58,22 @@ describe('Auth (e2e)', () => {
     await stopTestApp(context);
   });
 
-  /** POST /auth/login from a new client IP. */
+  /** POST /auth/login from a new source IP address. */
   function login(body: object, headers: Record<string, string> = {}) {
     return request(server)
       .post('/auth/login')
-      .set('X-Forwarded-For', nextClientIp())
+      .set('X-Forwarded-For', nextSourceIp())
       .set(headers)
       .send(body);
   }
 
   async function signTestToken(
     payload: object,
-    options: { expiresIn?: number; secret?: string } = {},
+    options: {
+      expiresIn?: number;
+      secret?: string;
+      algorithm?: 'HS512';
+    } = {},
   ): Promise<string> {
     return context.app.get(JwtService).signAsync(payload, options);
   }
@@ -148,10 +152,27 @@ describe('Auth (e2e)', () => {
       });
     });
 
+    it('rejects a password of more than 72 bytes with 400, the limit of bcrypt', async () => {
+      const res = await login({
+        email: TEST_USER.email,
+        password: 'a'.repeat(73),
+      }).expect(400);
+      expect(res.body).toEqual({
+        statusCode: 400,
+        message: ['password must be at most 72 bytes'],
+        error: 'Bad Request',
+      });
+      // Exactly 72 bytes is still checked: a wrong one gets the generic 401.
+      await login({
+        email: TEST_USER.email,
+        password: 'a'.repeat(72),
+      }).expect(401);
+    });
+
     it('does not parse form-encoded bodies (JSON only)', async () => {
       await request(server)
         .post('/auth/login')
-        .set('X-Forwarded-For', nextClientIp())
+        .set('X-Forwarded-For', nextSourceIp())
         .type('form')
         .send(CREDENTIALS)
         .expect(400);
@@ -222,6 +243,31 @@ describe('Auth (e2e)', () => {
         .expect(401);
     });
 
+    it('rejects a token signed with HS512, even with the app secret', async () => {
+      const token = await signTestToken(
+        { sub: DEFAULT_USER_ID, email: TEST_USER.email },
+        { algorithm: 'HS512' },
+      );
+      const res = await request(server)
+        .get('/auth/me')
+        .auth(token, { type: 'bearer' })
+        .expect(401);
+      expect(res.body).toEqual(UNAUTHORIZED);
+    });
+
+    it('rejects a token whose sub is not a UUID', async () => {
+      const token = await signTestToken({
+        sub: 'not-a-uuid',
+        email: TEST_USER.email,
+      });
+      // A 401, not the 500 that PostgreSQL's uuid syntax error would give.
+      const res = await request(server)
+        .get('/auth/me')
+        .auth(token, { type: 'bearer' })
+        .expect(401);
+      expect(res.body).toEqual(UNAUTHORIZED);
+    });
+
     it('rejects a token whose User does not exist', async () => {
       const token = await signTestToken({
         sub: randomUUID(),
@@ -276,8 +322,8 @@ describe('Auth (e2e)', () => {
   });
 
   describe('login throttle', () => {
-    it('blocks the 6th attempt from one client IP, but not other clients', async () => {
-      const ip = nextClientIp();
+    it('blocks the 6th attempt from one IP address, but not other addresses', async () => {
+      const ip = nextSourceIp();
       for (let attempt = 1; attempt <= 5; attempt += 1) {
         await request(server)
           .post('/auth/login')

@@ -174,8 +174,16 @@ describe('createInvoiceSchema', () => {
   it.each<[string, (form: CreateInvoiceFormInput) => void]>([
     ['a Rate of 131072.02', (form) => (form.item.rate = '131072.02')],
     ['a Discount of 131072.02', (form) => (form.discount = '131072.02')],
+    // The Discount is optional: a blank one means 0, as it does for the API.
+    ['a blank Discount', (form) => (form.discount = '')],
   ])('accepts %s', (_case, change) => {
     expect(errorsAfter(change)).toEqual({})
+  })
+
+  it('sends a blank Discount as 0', () => {
+    const body = toCreateInvoiceRequest(createInvoiceSchema.parse({ ...VALID, discount: '' }))
+
+    expect(body.discount).toBe(0)
   })
 
   it('checks the dates while other fields are still invalid', () => {
